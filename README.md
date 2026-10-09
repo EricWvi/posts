@@ -21,13 +21,13 @@ posts 在容器里，访问宿主机上的 workflow 服务要走 Docker 网络 `
 
 ## 配置
 
-见 [config.example.yaml](config.example.yaml)。容器挂载两个目录（宿主机上在 `/root/only/selfhost/posts/` 下）：
+见 [config.example.yaml](config.example.yaml)。容器挂载两个目录（宿主机上分别是 `/root/only/selfhost/posts/config` 和 `/home/eric/projects/reading-list`）：
 
 ```
 config/            → /app/config
 ├─ config.yaml
 └─ posts.db        # 自动创建，位置由 database 决定（相对路径以 config.yaml 所在目录为准）
-data/              → /app/data
+reading-list/      → /app/data
 ├─ .work/<id>/     # 待转换或转换失败的清洗后页面
 └─ 2026/10/12/plugin-extensions.md + assets/
 ```
@@ -46,14 +46,16 @@ data/              → /app/data
 
 compose 服务定义在 dotfiles 仓库的 `selfhost/only/docker-compose.yaml`（服务名 `posts`），`POSTS_OIDC_CLIENT_SECRET` 和其他 secrets 一样由 compose 环境变量提供。
 
+文章直接写进 eric 的 `reading-list` 仓库，便于用 git 管理，所以容器以 `user: "1000:1000"`（eric）运行，config 目录也要归 eric 所有。`.work/` 是转换中的临时目录，应加入 reading-list 的 `.gitignore`。
+
 ```bash
-cd /root/only/selfhost/posts
-mkdir -p config data && chown -R 65532:65532 config data   # distroless nonroot
-cp config.example.yaml config/config.yaml                  # 修改 public_url、oidc、data_dir、workflow.url
+mkdir -p /root/only/selfhost/posts/config
+cp config.example.yaml /root/only/selfhost/posts/config/config.yaml   # 修改 public_url、oidc、data_dir、workflow.url
+chown -R 1000:1000 /root/only/selfhost/posts/config
 cd /root/dotfiles/selfhost/only && docker compose up -d posts
 ```
 
-对外访问照常配置 Caddy 路由（经 Authelia）和 frpc。
+Caddy 把 `posts.onlyquant.top` 反代到 `posts:36751`；posts 自己做 OIDC 登录，不加 `forward_auth`。
 
 ## 本地开发
 
