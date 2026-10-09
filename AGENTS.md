@@ -1,5 +1,7 @@
 # AGENTS.md
 
+修改转换、清洗、存储等行为前先读 `docs/design.md`，改了规则要同步更新它。
+
 ## Commands
 
 Project commands live in `Taskfile.yml`; run `task --list` to see them all.
