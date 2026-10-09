@@ -91,13 +91,13 @@ posts 运行在容器里，容器内的 `127.0.0.1` 不是宿主机，所以 wf-
 
 ## 阶段 3：wf-posts 桥接服务（`cmd/wf-posts`）
 
-- [ ] `POST /api/convert`：请求体为清洗后的 html，返回 wf 输出的 JSON。
+- [x] `POST /api/convert`：请求体为清洗后的 html，返回 wf 输出的 JSON。
   - 每个请求创建 `/tmp/wf-posts/<随机名>/`，写入 `index.html`，执行 `wf html2md index.html result.json`。
   - 成功后删除该目录。失败时保留目录并在日志中打印路径，启动时清理 7 天以前的残留目录。
   - 串行执行，可配置超时。wf 失败返回 502，并附上 stderr 尾部；超时返回 504。错误响应为 `{"error":"..."}`。
-- [ ] 参数：`-listen`（默认 `172.28.1.1:55680`）、`-wf`（wf 可执行文件路径）、`-timeout`。不鉴权。
-- [ ] SIGINT/SIGTERM 时终止子进程并退出。
-- [ ] 测试：用假的 wf 脚本覆盖成功、失败、超时。
+- [x] 参数：`-listen`（默认 `172.28.1.1:55680`）、`-wf`（wf 可执行文件路径）、`-timeout`、`-workdir`（默认 `/tmp/wf-posts`）。不鉴权。另有 `GET /healthz`。
+- [x] SIGINT/SIGTERM 时终止子进程并退出。
+- [x] 测试：用假的 wf 脚本覆盖成功、失败、超时。
 
 ## 阶段 4：posts 后端
 
