@@ -75,19 +75,20 @@ posts 运行在容器里，容器内的 `127.0.0.1` 不是宿主机，所以 wf-
 
 ## 阶段 2：wf `html2md` 工作流（workflow 仓库）
 
-- [ ] 在 `/home/eric/projects/workflow` 新增 `html2md` 工作流：`wf html2md <input.html> <output.json>`。
+- [x] 在 `/home/eric/projects/workflow` 新增 `html2md` 工作流：`wf html2md <input.html> <output.json> [--today YYYY-MM-DD]`。
   - 新增 profile：`gpt-6.1-sol` / `medium`。
   - 工作目录为输入文件所在目录。只读沙箱，审批策略 `never`，`skipGitRepoCheck`。
+  - html 直接嵌入 prompt，单轮完成。
   - 用结构化输出返回 `title`、`published_date`、`slug`、`markdown`，由 wf 写入 output.json。
-- [ ] prompt 要求：
+- [x] prompt 要求：
   - 核心是只保留正文，正文之外的页面内容一律舍弃。prompt 只讲通用原则，不写针对具体站点的规则。
   - 正文文字不增删改，只转格式。表格、代码块、列表、标题层级要忠实转换。
   - 图片、视频保留原相对路径 `assets/...`。md 没有原生语法的元素（如 video）保留 html 标签。
   - 发布日期优先取页面上的日期，判断不出时使用 prompt 中给出的当天日期。
   - slug 用英文小写短横线，非英文标题意译成英文。
-- [ ] 输出校验：日期格式和 slug 字符集不合法就报错退出。
-- [ ] 更新 workflow README 和测试（模拟 SDK 事件）。
-- [ ] 用样例 html 做一次真实调用冒烟，确认只保留了正文，站点导航、侧栏目录等被舍弃。
+- [x] 输出校验：日期格式和 slug 字符集不合法就报错退出。
+- [x] 更新 workflow README 和测试（模拟 SDK 事件）。
+- [x] 用样例 html 做一次真实调用冒烟，确认只保留了正文，站点导航、侧栏目录等被舍弃。（约 1 分钟；需要 codex SDK ≥ 0.162.0，旧版服务端拒绝 gpt-6.1-sol）
 
 ## 阶段 3：wf-posts 桥接服务（`cmd/wf-posts`）
 
