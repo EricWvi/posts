@@ -41,7 +41,7 @@ func TestLoadOIDC(t *testing.T) {
 	want := Config{
 		Listen:      ":9000",
 		Database:    filepath.Join(filepath.Dir(path), "posts.db"),
-		DataDir:     "./data",
+		DataDir:     filepath.Join(filepath.Dir(path), "data"),
 		PublicURL:   "https://posts.test",
 		OIDC:        OIDC{Issuer: "https://auth.test", ClientID: "posts", ClientSecret: "secret"},
 		Workflow:    Workflow{URL: "http://127.0.0.1:55680", Timeout: Duration(30 * time.Minute)},
@@ -52,20 +52,24 @@ func TestLoadOIDC(t *testing.T) {
 	}
 }
 
-func TestLoadDatabasePath(t *testing.T) {
-	cfg, err := Load(write(t, "dev_user: eric\ndatabase: /var/lib/posts.db\n"))
+func TestLoadPaths(t *testing.T) {
+	cfg, err := Load(write(t, "dev_user: eric\ndatabase: /var/lib/posts.db\ndata_dir: /srv/posts\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Database != "/var/lib/posts.db" {
-		t.Fatalf("absolute database = %q", cfg.Database)
+	if cfg.Database != "/var/lib/posts.db" || cfg.DataDir != "/srv/posts" {
+		t.Fatalf("absolute paths = %q, %q", cfg.Database, cfg.DataDir)
 	}
-	path := write(t, "dev_user: eric\ndatabase: db/posts.db\n")
+	path := write(t, "dev_user: eric\ndatabase: db/posts.db\ndata_dir: posts\n")
 	if cfg, err = Load(path); err != nil {
 		t.Fatal(err)
 	}
-	if want := filepath.Join(filepath.Dir(path), "db", "posts.db"); cfg.Database != want {
+	dir := filepath.Dir(path)
+	if want := filepath.Join(dir, "db", "posts.db"); cfg.Database != want {
 		t.Fatalf("relative database = %q, want %q", cfg.Database, want)
+	}
+	if want := filepath.Join(dir, "posts"); cfg.DataDir != want {
+		t.Fatalf("relative data_dir = %q, want %q", cfg.DataDir, want)
 	}
 }
 

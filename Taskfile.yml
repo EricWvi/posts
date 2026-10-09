@@ -108,6 +108,6 @@ tasks:
       - npm run dev
 
   run:server:
-    desc: Run the posts server with config.yaml in the project root
+    desc: Run the posts server with .data/config.yaml; the database and posts live in .data too
     cmds:
-      - go run ./cmd/posts {{.CLI_ARGS}}
+      - go run ./cmd/posts -config .data/config.yaml {{.CLI_ARGS}}

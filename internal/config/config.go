@@ -28,7 +28,7 @@ type Config struct {
 	// directory of the config file, so the database sits next to it.
 	Database string `yaml:"database"`
 	// DataDir holds the converted posts and their assets. A relative path is
-	// resolved against the working directory.
+	// resolved against the directory of the config file, like Database.
 	DataDir string `yaml:"data_dir"`
 	// PublicURL is the origin browsers use to reach the site, e.g.
 	// "https://posts.example.com". It forms the OIDC redirect URI.
@@ -104,9 +104,8 @@ func Load(path string) (Config, error) {
 	if secret := os.Getenv(ClientSecretEnv); secret != "" {
 		cfg.OIDC.ClientSecret = secret
 	}
-	if cfg.Database != "" && !filepath.IsAbs(cfg.Database) {
-		cfg.Database = filepath.Join(filepath.Dir(path), cfg.Database)
-	}
+	cfg.Database = resolve(path, cfg.Database)
+	cfg.DataDir = resolve(path, cfg.DataDir)
 	return cfg, cfg.validate()
 }
 
@@ -138,4 +137,12 @@ func (c Config) validate() error {
 		return fmt.Errorf("config: oidc.issuer, oidc.client_id and oidc.client_secret (or %s) are required unless dev_user is set", ClientSecretEnv)
 	}
 	return nil
+}
+
+// resolve makes a relative p relative to the directory of the config file.
+func resolve(configPath, p string) string {
+	if p == "" || filepath.IsAbs(p) {
+		return p
+	}
+	return filepath.Join(filepath.Dir(configPath), p)
 }

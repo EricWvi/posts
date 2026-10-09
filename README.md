@@ -56,9 +56,9 @@ docker compose up -d
 
 ```bash
 task install:frontend
-cp config.example.yaml config.yaml   # 设置 dev_user，workflow.url 改为 http://127.0.0.1:55680
+mkdir -p .data && cp config.example.yaml .data/config.yaml   # 设置 dev_user，workflow.url 改为 http://127.0.0.1:55680
 # 终端 1：在 workflow 仓库执行 task run:server
-task run:server                      # 终端 2
+task run:server                      # 终端 2，posts.db 和 data/ 都在 .data 下
 task run:web                         # 终端 3，打开 http://localhost:5173
 ```
 

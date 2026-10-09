@@ -4,6 +4,7 @@ listen: ":36751"
 # this file, so in the container it lands in the mounted config directory.
 database: "posts.db"
 # Converted posts: <data_dir>/<year>/<month>/<post-id>/<slug>.md plus assets/
+# A relative path is resolved against the directory of this file.
 # In the container use "/app/data".
 data_dir: "./data"
 # Largest html file one upload may carry, in MB.
