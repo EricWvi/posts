@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@plugin "@tailwindcss/typography";
 
 /*
  * Colours follow the system theme. Neither mode uses pure white or pure

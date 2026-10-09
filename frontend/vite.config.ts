@@ -30,5 +30,7 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
+    // One page app with a Markdown renderer; splitting buys nothing here.
+    chunkSizeWarningLimit: 1024,
   },
 });

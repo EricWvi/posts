@@ -102,21 +102,22 @@ posts 运行在容器里，容器内的 `127.0.0.1` 不是宿主机，所以 wf-
 
 ## 阶段 4：posts 后端
 
-- [ ] `internal/config`：照搬 homepage 并扩展新增字段。`client_secret` 支持环境变量。
-- [ ] `internal/auth`：照搬 homepage（OIDC、服务端 session、`dev_user`）。
-- [ ] `internal/store`：SQLite 迁移。
+- [x] `internal/config`：照搬 homepage 并扩展新增字段。`client_secret` 支持环境变量。
+- [x] `internal/auth`：照搬 homepage（OIDC、服务端 session、`dev_user`）。
+- [x] `internal/store`：SQLite 迁移。
   - `users`、`sessions`（同 homepage）。
   - `posts`：id、user_id、title、published_date、slug、path（相对 data_dir 的 md 路径）、source_url、uploaded_at、status（`queued` / `converting` / `done` / `failed`）、error、content_warning、converted_at。
-- [ ] 文件处理：
+- [x] 文件处理：
   - 上传后先放到工作目录 `<data>/.work/<id>/`，内含 `index.html`（清洗后）和 `assets/`。
   - 转换成功后创建 `<data>/<year>/<month>/<id>/`，写入 `<slug>.md`，并只复制 md 实际引用到的资源到 `assets/`（导航图标等被舍弃的资源不保留）。随后删除工作目录。
   - 转换失败时保留工作目录，供重试。
-- [ ] 上传 `POST /api/posts`（multipart，支持多文件，有大小上限）：清洗、写入工作目录、入队。
-- [ ] 转换 worker：
+- [x] 上传 `POST /api/posts`（multipart，支持多文件，有大小上限）：清洗、写入工作目录、入队。每个文件单独报告错误，一个坏文件不影响其他文件。
+- [x] `GET /api/me`：当前用户。
+- [x] 转换 worker：
   - 串行处理 `queued` 的文章，调用 wf-posts，按上面的规则落盘并更新元数据。
   - 转换后做内容校验，不通过就记录警告和差异摘要。
   - 启动时把残留的 `converting` 重置为 `queued`。
-- [ ] API：
+- [x] API：
   - `GET /api/posts`：列表。
   - `GET /api/posts/{id}`：详情、状态、警告。
   - `GET /api/posts/{id}/md`：md 正文。
@@ -124,20 +125,20 @@ posts 运行在容器里，容器内的 `127.0.0.1` 不是宿主机，所以 wf-
   - `GET /api/posts/{id}/zip`：打包 md 和 `assets/`。
   - `POST /api/posts/{id}/retry`：重新入队。
   - `DELETE /api/posts/{id}`：删除记录、文章目录和工作目录。
-- [ ] 所有 `/api` 都按当前用户过滤。
-- [ ] 测试：store 迁移、上传→入队→假 wf-posts→完成/失败、目录布局、资源裁剪、用户隔离、内容校验。
+- [x] 所有 `/api` 都按当前用户过滤。
+- [x] 测试：store 迁移、上传→入队→假 wf-posts→完成/失败、目录布局、资源裁剪、用户隔离、内容校验。
 
 ## 阶段 5：前端
 
-- [ ] 登录态处理和退出登录（参照 homepage 前端）。
-- [ ] 上传：拖拽或选择多个 `.html`，用 zustand 管理上传进度。
-- [ ] 文章列表：标题、发布日期、来源、状态徽标。有未完成任务时用 React Query 轮询。
-- [ ] 详情页：
+- [x] 登录态处理和退出登录（参照 homepage 前端）。
+- [x] 上传：拖拽或选择多个 `.html`，用 zustand 管理上传进度。
+- [x] 文章列表：标题、发布日期、来源、状态徽标。有未完成任务时用 React Query 轮询。
+- [x] 详情页：
   - 用 react-markdown + remark-gfm 渲染 md，允许经过 sanitize 的 html（video 等）。
   - 资源相对路径改写到 `/api/posts/{id}/assets/`。
   - 展示内容校验警告和差异。
-- [ ] 操作：下载 zip、删除（需确认）、失败后重试。
-- [ ] 空状态、错误状态、移动端布局，跟随系统亮暗主题。
+- [x] 操作：下载 zip、删除（需确认）、失败后重试。
+- [x] 空状态、错误状态、移动端布局，跟随系统亮暗主题。
 
 ## 阶段 6：部署
 
