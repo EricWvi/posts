@@ -14,14 +14,14 @@
 
 | 组件 | 运行方式 | 说明 |
 | --- | --- | --- |
-| posts（`cmd/posts`） | root 的 docker compose | Go + SQLite（无 CGO），前端 embed 进二进制，OIDC 登录逻辑与 homepage 相同 |
+| posts（`cmd/posts`） | dotfiles `selfhost/only/docker-compose.yaml`（root） | Go + SQLite（无 CGO），前端 embed 进二进制，OIDC 登录逻辑与 homepage 相同 |
 | workflow（`/home/eric/projects/workflow`） | 当前用户的 systemd user service | `POST /api/v1/workflows/html2md` 收 `{"html": ...}`，执行 `wf html2md`，返回 JSON；串行、无鉴权 |
 
 posts 在容器里，访问宿主机上的 workflow 服务要走 Docker 网络 `my-network` 在宿主机上的网关地址（默认 `172.28.1.1:55680`）。这个地址只有宿主机和该网络里的容器能访问，所以不做鉴权。workflow 的部署、profile 配置和接口文档见它的 README 和 dashboard。
 
 ## 配置
 
-见 [config.example.yaml](config.example.yaml)。容器挂载两个目录：
+见 [config.example.yaml](config.example.yaml)。容器挂载两个目录（宿主机上在 `/root/only/selfhost/posts/` 下）：
 
 ```
 config/            → /app/config
@@ -44,10 +44,13 @@ data/              → /app/data
 
 镜像由 GitHub Actions 在打 `v*` tag 时构建并推送到 GHCR（[release.yml](.github/workflows/release.yml)），不在本地构建。
 
+compose 服务定义在 dotfiles 仓库的 `selfhost/only/docker-compose.yaml`（服务名 `posts`），`POSTS_OIDC_CLIENT_SECRET` 和其他 secrets 一样由 compose 环境变量提供。
+
 ```bash
+cd /root/only/selfhost/posts
 mkdir -p config data && chown -R 65532:65532 config data   # distroless nonroot
 cp config.example.yaml config/config.yaml                  # 修改 public_url、oidc、data_dir、workflow.url
-docker compose up -d
+cd /root/dotfiles/selfhost/only && docker compose up -d posts
 ```
 
 对外访问照常配置 Caddy 路由（经 Authelia）和 frpc。

@@ -143,7 +143,7 @@ posts 运行在容器里，容器内的 `127.0.0.1` 不是宿主机，所以 wf-
 ## 阶段 6：部署
 
 - [x] Dockerfile：多阶段构建（node 构建前端，go 编译），distroless nonroot 镜像，参照 homepage。只在 CI 构建，不在本地构建镜像。
-- [x] `compose.yaml`（在 root 用户下运行）：
+- [x] compose 服务（dotfiles `selfhost/only/docker-compose.yaml`，在 root 用户下运行）：
   - 挂载配置目录 `/app/config` 和数据目录 `/app/data`。
   - 加入 `my-network`，通过 Caddy + Authelia 对外提供服务。
 - [x] wf-posts systemd user service：`deploy/wf-posts.service.in` 和 `scripts/install-wf-posts-service.sh`，加上 `task run:setup-wf-posts`。
@@ -153,7 +153,7 @@ posts 运行在容器里，容器内的 `127.0.0.1` 不是宿主机，所以 wf-
   - 提示执行 `loginctl enable-linger`。
 - [x] README：部署步骤、OIDC 回调地址注册、Caddy/frpc 路由、wf-posts 监听地址和防火墙说明。
 
-- [ ] 实际部署：打 tag 构建镜像、在宿主机的 workflow 仓库运行 `task run:setup`、准备 config 和 data 目录、`docker compose up -d`、配置 Caddy/frpc/Authelia 回调。
+- [ ] 实际部署：打 tag 构建镜像、在宿主机的 workflow 仓库运行 `task run:setup`、准备 config 和 data 目录、`docker compose up -d posts`、配置 Caddy/frpc/Authelia 回调。
 
 ## 阶段 7：转换服务迁入 workflow
 
