@@ -60,7 +60,12 @@ type Asset struct {
 //     content is kept) and inline <svg>;
 //   - elements SingleFile marked as hidden (class "sf-hidden"), which were
 //     not displayed when the page was saved;
+//   - page chrome: header, nav, footer and aside elements (or their ARIA
+//     roles) outside any article or main element, unless they hold an h1;
 //   - style, on* event handler, data-* and srcdoc attributes;
+//   - utility classes such as Tailwind's "px-3" or "lg:flex", which only
+//     style the page. Classes that name a part, such as "reply_content",
+//     stay because they help tell the article from the rest of the page;
 //   - meta elements other than charset and named metadata;
 //   - comments.
 //
@@ -73,7 +78,7 @@ func Clean(src []byte) (Page, error) {
 	}
 	c := &cleaner{assets: map[string]struct{}{}}
 	c.readHeader(doc)
-	c.clean(doc)
+	c.clean(doc, false)
 
 	var out bytes.Buffer
 	if err := html.Render(&out, doc); err != nil {
@@ -136,18 +141,21 @@ func parseSavedDate(s string) time.Time {
 	return t
 }
 
-func (c *cleaner) clean(n *html.Node) {
+// clean cleans the children of n. inContent reports whether n is inside an
+// article or main element, where headers, navs and asides belong to the
+// article.
+func (c *cleaner) clean(n *html.Node, inContent bool) {
 	for child := n.FirstChild; child != nil; {
 		next := child.NextSibling
 		switch {
 		case child.Type == html.CommentNode:
 			n.RemoveChild(child)
-		case child.Type == html.ElementNode && c.drop(child):
+		case child.Type == html.ElementNode && (c.drop(child) || !inContent && isChrome(child)):
 			n.RemoveChild(child)
 		case child.Type == html.ElementNode && child.DataAtom == atom.Template && hasAttr(child, "shadowrootmode"):
 			// Declarative shadow DOM: the template's content is what the
 			// host displayed, so it takes the template's place.
-			c.clean(child)
+			c.clean(child, inContent)
 			for grand := child.FirstChild; grand != nil; {
 				after := grand.NextSibling
 				child.RemoveChild(grand)
@@ -162,7 +170,7 @@ func (c *cleaner) clean(n *html.Node) {
 				}
 				c.cleanAttrs(child)
 			}
-			c.clean(child)
+			c.clean(child, inContent || isContent(child))
 		}
 		child = next
 	}
@@ -193,6 +201,39 @@ func (c *cleaner) drop(n *html.Node) bool {
 	return false
 }
 
+// isChrome reports whether an element is part of the page around the
+// article. A header holding the h1 is kept: some themes put the article
+// title in a header next to, rather than inside, the article.
+func isChrome(n *html.Node) bool {
+	switch n.DataAtom {
+	case atom.Header, atom.Nav, atom.Footer, atom.Aside:
+	default:
+		switch attr(n, "role") {
+		case "banner", "navigation", "contentinfo", "complementary":
+		default:
+			return false
+		}
+	}
+	for d := range n.Descendants() {
+		if d.Type == html.ElementNode && d.DataAtom == atom.H1 {
+			return false
+		}
+	}
+	return true
+}
+
+// isContent reports whether an element holds the article.
+func isContent(n *html.Node) bool {
+	if n.Type != html.ElementNode {
+		return false
+	}
+	if n.DataAtom == atom.Article || n.DataAtom == atom.Main {
+		return true
+	}
+	role := attr(n, "role")
+	return role == "main" || role == "article"
+}
+
 func (c *cleaner) cleanAttrs(n *html.Node) {
 	kept := n.Attr[:0]
 	for _, a := range n.Attr {
@@ -202,6 +243,10 @@ func (c *cleaner) cleanAttrs(n *html.Node) {
 			continue
 		}
 		switch {
+		case key == "class":
+			if a.Val = semanticClasses(a.Val); a.Val == "" {
+				continue
+			}
 		case key == "srcset" || key == "imagesrcset":
 			a.Val = dataURIs.ReplaceAllStringFunc(a.Val, c.extract)
 		case hasDataScheme(a.Val):
@@ -210,6 +255,46 @@ func (c *cleaner) cleanAttrs(n *html.Node) {
 		kept = append(kept, a)
 	}
 	n.Attr = kept
+}
+
+// semanticClasses drops the utility classes from a class attribute.
+func semanticClasses(v string) string {
+	var kept []string
+	for _, class := range strings.Fields(v) {
+		if !isUtilityClass(class) {
+			kept = append(kept, class)
+		}
+	}
+	return strings.Join(kept, " ")
+}
+
+// Utility classes in the style of Tailwind: a property prefix and a value,
+// such as "px-3", "text-sm" or "line-clamp-2", or one of a few keywords.
+var (
+	utilityPrefix = regexp.MustCompile(`^(?:[pm][xytrblse]?|[wh]|size|min-[wh]|max-[wh]|gap(?:-[xy])?|space-[xy]|` +
+		`text|font|leading|tracking|bg|border|rounded|ring|shadow|outline|divide|opacity|z|` +
+		`top|bottom|left|right|inset(?:-[xy])?|flex|grid|grid-cols|grid-rows|col|row|order|` +
+		`items|justify|self|place|content|overflow|whitespace|line-clamp|object|aspect|` +
+		`duration|delay|ease|transition|translate-[xy]|scale|rotate|select|shrink|grow|basis|` +
+		`underline-offset|decoration|cursor|pointer-events|list|fill|stroke)-[a-z0-9.]+$`)
+	utilityKeywords = map[string]bool{
+		"flex": true, "grid": true, "block": true, "inline": true, "inline-block": true, "inline-flex": true,
+		"hidden": true, "contents": true, "relative": true, "absolute": true, "fixed": true, "sticky": true,
+		"visible": true, "invisible": true, "truncate": true, "underline": true, "no-underline": true,
+		"italic": true, "uppercase": true, "lowercase": true, "capitalize": true, "border": true,
+		"rounded": true, "shadow": true, "transition": true, "sr-only": true, "group": true, "peer": true,
+		"grow": true, "shrink": true, "not-prose": true,
+	}
+)
+
+// isUtilityClass reports whether a class only styles the element. Variants
+// ("lg:flex"), arbitrary values ("w-[218px]"), opacity ("bg-black/50") and
+// negative values ("-top-0.5") give utilities away by their punctuation.
+func isUtilityClass(class string) bool {
+	if strings.ContainsAny(class, ":[/") || strings.HasPrefix(class, "-") {
+		return true
+	}
+	return utilityKeywords[class] || utilityPrefix.MatchString(class)
 }
 
 // dataURIs matches the data: URIs inside a srcset. Base64 payloads contain

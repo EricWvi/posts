@@ -72,6 +72,49 @@ func TestRemovesStylingAndScripting(t *testing.T) {
 	}
 }
 
+func TestRemovesPageChrome(t *testing.T) {
+	p := mustClean(t, `<body>
+<header><a href=/>Site</a></header>
+<div role=banner>banner</div>
+<nav>site nav</nav>
+<div class=layout><aside>sidebar</aside><div role=navigation>role nav</div><div role=complementary>related</div>
+<main><nav>toc</nav><p>main text</p><aside>main note</aside></main></div>
+<article><header><h1>Post</h1></header><p>body</p><footer>post footer</footer></article>
+<div role=main><nav>in role main</nav></div>
+<div role=article><aside>in role article</aside></div>
+<header class=post-header><h1>Title outside article</h1></header>
+<footer>site footer</footer><div role=contentinfo>copyright</div>
+</body>`)
+	out := string(p.HTML)
+	for _, gone := range []string{"Site", "banner", "site nav", "sidebar", "role nav", "related", "site footer", "copyright"} {
+		if strings.Contains(out, gone) {
+			t.Errorf("output still contains %q:\n%s", gone, out)
+		}
+	}
+	for _, kept := range []string{"toc", "main text", "main note", "<h1>Post</h1>", "body", "post footer",
+		"in role main", "in role article", "Title outside article", `<div class="layout">`} {
+		if !strings.Contains(out, kept) {
+			t.Errorf("output lost %q:\n%s", kept, out)
+		}
+	}
+}
+
+func TestRemovesUtilityClasses(t *testing.T) {
+	p := mustClean(t, `<body>
+<div class="flex items-center gap-1.5 px-3 py-1.5 text-sm text-secondary lg:grid lg:grid-cols-[1fr_auto] -top-0.5 bg-black/50 w-full hidden"><p>x</p></div>
+<div class="prose prose-content topic_content page-copy-action__icon--copy flex cell"><p>y</p></div>
+<div class="reply_content"><p>z</p></div>
+</body>`)
+	out := string(p.HTML)
+	for _, want := range []string{`<div><p>x</p></div>`,
+		`<div class="prose prose-content topic_content page-copy-action__icon--copy cell">`,
+		`<div class="reply_content">`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %s in:\n%s", want, out)
+		}
+	}
+}
+
 func TestUnwrapsShadowRoots(t *testing.T) {
 	p := mustClean(t, `<body><my-card><template shadowrootmode=open><style>:host{}</style><p>shadow text</p></template></my-card></body>`)
 	out := string(p.HTML)
@@ -152,16 +195,17 @@ func TestSample(t *testing.T) {
 		p.SourceURL != "https://developers.openai.com/plugins/build/extensions" || p.SavedAt.IsZero() {
 		t.Fatalf("meta: %q %q %v", p.Title, p.SourceURL, p.SavedAt)
 	}
-	if len(p.HTML) > len(src)/10 {
+	if len(p.HTML) > len(src)/50 {
 		t.Errorf("cleaned html is %d of %d bytes", len(p.HTML), len(src))
 	}
 	out := string(p.HTML)
-	for _, gone := range []string{"<style", "<script", "<svg", "data:", "style=", "data-", "sf-hidden", "@font-face"} {
+	for _, gone := range []string{"<style", "<script", "<svg", "data:", "style=", "data-", "sf-hidden", "@font-face",
+		"items-center", "lg:"} {
 		if strings.Contains(out, gone) {
 			t.Errorf("output still contains %q", gone)
 		}
 	}
-	for _, kept := range []string{"Plugin Extensions", "OpenAI MCP Extensions enables developers", `class="`, "<video", `poster="assets/`} {
+	for _, kept := range []string{"Plugin Extensions", "OpenAI MCP Extensions enables developers", `class="prose`, "<video", `poster="assets/`} {
 		if !strings.Contains(out, kept) {
 			t.Errorf("output lost %q", kept)
 		}

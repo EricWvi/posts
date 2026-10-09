@@ -102,7 +102,7 @@ var page = []byte(`<!DOCTYPE html><html><!--
  url: https://blog.test/hello
  saved date: Thu Oct 08 2026 10:21:57 GMT+0800 (中国标准时间)
 --><head><title>Hello | Blog</title><style>p{}</style></head><body>
-<header><img src="data:image/png;base64,` + b64("logo") + `" alt=Blog></header>
+<div class=logo><img src="data:image/png;base64,` + b64("logo") + `" alt=Blog></div>
 <article><h1>Hello</h1><p>Real text.</p><img src="data:image/png;base64,` + b64("photo") + `" alt=Photo></article>
 </body></html>`)
 
