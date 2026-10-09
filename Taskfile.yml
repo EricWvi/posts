@@ -46,10 +46,10 @@ tasks:
       - go build ./...
 
   build:wf-posts:
-    desc: Build the wf-posts bridge binary (release/wf-posts)
+    desc: Build the wf-posts bridge binary (build/wf-posts, kept by task clean because the service runs it)
     cmds:
-      - mkdir -p release
-      - CGO_ENABLED=0 go build -trimpath -o release/wf-posts ./cmd/wf-posts
+      - mkdir -p build
+      - CGO_ENABLED=0 go build -trimpath -o build/wf-posts ./cmd/wf-posts
 
   clean:
     desc: Remove release binaries and the built frontend dist
@@ -117,6 +117,13 @@ tasks:
     desc: Run the posts server with config.yaml in the project root
     cmds:
       - go run ./cmd/posts {{.CLI_ARGS}}
+
+  run:setup-wf-posts:
+    desc: Build wf-posts and install it as a systemd user service of the current user
+    cmds:
+      - test "$(id -u)" -ne 0 || (echo '请使用安装了 wf 的普通用户执行 task，不要使用 root' >&2; exit 1)
+      - task: build:wf-posts
+      - ./scripts/install-wf-posts-service.sh
 
   run:wf-posts:
     desc: Run the wf-posts bridge on 127.0.0.1:55680

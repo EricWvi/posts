@@ -9,4 +9,4 @@ memories
 *.log
 *.db
 config.yaml
-testdata
+build

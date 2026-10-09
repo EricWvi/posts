@@ -142,16 +142,18 @@ posts 运行在容器里，容器内的 `127.0.0.1` 不是宿主机，所以 wf-
 
 ## 阶段 6：部署
 
-- [ ] Dockerfile：多阶段构建（node 构建前端，go 编译），distroless nonroot 镜像，参照 homepage。只在 CI 构建，不在本地构建镜像。
-- [ ] `compose.yaml`（在 root 用户下运行）：
+- [x] Dockerfile：多阶段构建（node 构建前端，go 编译），distroless nonroot 镜像，参照 homepage。只在 CI 构建，不在本地构建镜像。
+- [x] `compose.yaml`（在 root 用户下运行）：
   - 挂载配置目录 `/app/config` 和数据目录 `/app/data`。
   - 加入 `my-network`，通过 Caddy + Authelia 对外提供服务。
-- [ ] wf-posts systemd user service：`deploy/wf-posts.service.in` 和 `scripts/install-wf-posts-service.sh`，加上 `task run:setup-wf-posts`。
-  - 向导询问 wf 路径、监听地址（默认 `172.28.1.1:55680`）、代理。
+- [x] wf-posts systemd user service：`deploy/wf-posts.service.in` 和 `scripts/install-wf-posts-service.sh`，加上 `task run:setup-wf-posts`。
+  - 向导询问 wf 路径、监听地址（自动读取 `my-network` 网关，读不到时默认 `172.28.1.1:55680`）、代理。二进制在 `build/wf-posts`，`task clean` 不删除。
   - 注入 `PATH`（wf 依赖 node/nvm）、`HOME`、代理变量。
   - 不启用 `PrivateTmp`，便于直接在 `/tmp/wf-posts` 排查失败任务。
   - 提示执行 `loginctl enable-linger`。
-- [ ] README：部署步骤、OIDC 回调地址注册、Caddy/frpc 路由、wf-posts 监听地址和防火墙说明。
+- [x] README：部署步骤、OIDC 回调地址注册、Caddy/frpc 路由、wf-posts 监听地址和防火墙说明。
+
+- [ ] 实际部署：打 tag 构建镜像、在宿主机运行 `task run:setup-wf-posts`、准备 config 和 data 目录、`docker compose up -d`、配置 Caddy/frpc/Authelia 回调。
 
 ## 后续（第一版不做）
 
