@@ -39,4 +39,3 @@ packages/contracts/.test-dist/
 *.db-shm
 *.db-wal
 /release/
-/build/

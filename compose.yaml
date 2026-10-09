@@ -16,8 +16,8 @@ services:
     networks:
       - my-network
 
-# Shared homelab network. wf-posts listens on its gateway address on the
-# host (172.28.1.1), which config.yaml's wf_posts.url points at.
+# Shared homelab network. The workflow service listens on its gateway
+# address on the host (172.28.1.1), which config.yaml's workflow.url points at.
 networks:
   my-network:
     external: true

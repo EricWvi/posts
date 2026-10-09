@@ -36,8 +36,8 @@ type Config struct {
 	OIDC      OIDC   `yaml:"oidc"`
 	// DevUser, when set, signs every request in as this local user and
 	// disables OIDC. For local development only.
-	DevUser string  `yaml:"dev_user"`
-	WfPosts WfPosts `yaml:"wf_posts"`
+	DevUser  string   `yaml:"dev_user"`
+	Workflow Workflow `yaml:"workflow"`
 	// MaxUploadMB caps the size of one uploaded html file.
 	MaxUploadMB int `yaml:"max_upload_mb"`
 }
@@ -49,11 +49,12 @@ type OIDC struct {
 	ClientSecret string `yaml:"client_secret"`
 }
 
-// WfPosts locates the conversion bridge running on the Docker host.
-type WfPosts struct {
+// Workflow locates the workflow service on the Docker host, whose
+// html2md API converts the pages.
+type Workflow struct {
 	URL string `yaml:"url"`
-	// Timeout bounds one conversion, including the time the bridge spends
-	// running the model.
+	// Timeout bounds one conversion, including the time the service spends
+	// queueing and running the model.
 	Timeout Duration `yaml:"timeout"`
 }
 
@@ -78,7 +79,7 @@ func Default() Config {
 		Listen:      ":36751",
 		Database:    "posts.db",
 		DataDir:     "./data",
-		WfPosts:     WfPosts{URL: "http://127.0.0.1:55680", Timeout: Duration(30 * time.Minute)},
+		Workflow:    Workflow{URL: "http://127.0.0.1:55680", Timeout: Duration(30 * time.Minute)},
 		MaxUploadMB: 100,
 	}
 }
@@ -122,8 +123,8 @@ func (c Config) validate() error {
 	if c.MaxUploadMB <= 0 {
 		return errors.New("config: max_upload_mb must be positive")
 	}
-	if u, err := url.Parse(c.WfPosts.URL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return errors.New("config: wf_posts.url must be an http URL such as http://172.28.1.1:55680")
+	if u, err := url.Parse(c.Workflow.URL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return errors.New("config: workflow.url must be an http URL such as http://172.28.1.1:55680")
 	}
 	if c.DevUser != "" {
 		return nil

@@ -20,9 +20,10 @@ oidc:
   # Prefer the POSTS_OIDC_CLIENT_SECRET environment variable.
   client_secret: ""
 
-# The wf-posts bridge on the Docker host. It listens on the host's gateway
-# address of the Docker network, so only the host and its containers reach it.
-wf_posts:
+# The workflow service (projects/workflow) on the Docker host. It listens on
+# the host's gateway address of the Docker network, so only the host and its
+# containers reach it.
+workflow:
   url: "http://172.28.1.1:55680"
   # One conversion, including the model run. Units: h, m, s.
   timeout: "30m"

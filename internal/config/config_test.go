@@ -44,7 +44,7 @@ func TestLoadOIDC(t *testing.T) {
 		DataDir:     "./data",
 		PublicURL:   "https://posts.test",
 		OIDC:        OIDC{Issuer: "https://auth.test", ClientID: "posts", ClientSecret: "secret"},
-		WfPosts:     WfPosts{URL: "http://127.0.0.1:55680", Timeout: Duration(30 * time.Minute)},
+		Workflow:    Workflow{URL: "http://127.0.0.1:55680", Timeout: Duration(30 * time.Minute)},
 		MaxUploadMB: 100,
 	}
 	if cfg != want {
@@ -98,7 +98,7 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 	for _, content := range []string{
 		"data_dir: \"\"\ndev_user: eric\n",
 		"max_upload_mb: 0\ndev_user: eric\n",
-		"wf_posts:\n  url: 172.28.1.1:55680\ndev_user: eric\n",
+		"workflow:\n  url: 172.28.1.1:55680\ndev_user: eric\n",
 		strings.Replace(validOIDC, "https://posts.test", "https://posts.test/sub", 1),
 		strings.Replace(validOIDC, "https://posts.test", "posts.test", 1),
 		strings.Replace(validOIDC, "  issuer: https://auth.test\n", "", 1),
@@ -110,15 +110,15 @@ func TestLoadRejectsInvalidValues(t *testing.T) {
 }
 
 func TestLoadTimeout(t *testing.T) {
-	cfg, err := Load(write(t, "dev_user: eric\nwf_posts:\n  timeout: 1h30m\n"))
+	cfg, err := Load(write(t, "dev_user: eric\nworkflow:\n  timeout: 1h30m\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if time.Duration(cfg.WfPosts.Timeout) != 90*time.Minute {
-		t.Fatalf("timeout = %v", time.Duration(cfg.WfPosts.Timeout))
+	if time.Duration(cfg.Workflow.Timeout) != 90*time.Minute {
+		t.Fatalf("timeout = %v", time.Duration(cfg.Workflow.Timeout))
 	}
 	for _, in := range []string{"0s", "5", "500ms", "-5m", "abc"} {
-		if _, err := Load(write(t, "dev_user: eric\nwf_posts:\n  timeout: "+in+"\n")); err == nil || !strings.Contains(err.Error(), "duration") {
+		if _, err := Load(write(t, "dev_user: eric\nworkflow:\n  timeout: "+in+"\n")); err == nil || !strings.Contains(err.Error(), "duration") {
 			t.Errorf("%s: err = %v, want duration error", in, err)
 		}
 	}

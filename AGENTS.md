@@ -14,4 +14,3 @@ considering a change complete.
 - Go tests: `task test:go`
 - All lint and unit tests: `task test`
 - Release binary: `task build`
-- wf-posts binary: `task build:wf-posts`

@@ -153,7 +153,16 @@ posts 运行在容器里，容器内的 `127.0.0.1` 不是宿主机，所以 wf-
   - 提示执行 `loginctl enable-linger`。
 - [x] README：部署步骤、OIDC 回调地址注册、Caddy/frpc 路由、wf-posts 监听地址和防火墙说明。
 
-- [ ] 实际部署：打 tag 构建镜像、在宿主机运行 `task run:setup-wf-posts`、准备 config 和 data 目录、`docker compose up -d`、配置 Caddy/frpc/Authelia 回调。
+- [ ] 实际部署：打 tag 构建镜像、在宿主机的 workflow 仓库运行 `task run:setup`、准备 config 和 data 目录、`docker compose up -d`、配置 Caddy/frpc/Authelia 回调。
+
+## 阶段 7：转换服务迁入 workflow
+
+wf-posts 的职责（对外提供转换 API）迁入 workflow 仓库的 dashboard 服务，posts 不再包含桥接服务。
+
+- [x] 删除 `cmd/wf-posts`、`internal/bridge`、`deploy/wf-posts.service.in`、`scripts/install-wf-posts-service.sh` 和相关 Taskfile 任务。
+- [x] 客户端改为 `POST /api/v1/workflows/html2md`，请求体 `{"html": "..."}`，响应多出的 `session_id` 忽略。
+- [x] 配置键 `wf_posts` 改名为 `workflow`，地址不变（部署 `http://172.28.1.1:55680`，本地开发 `http://127.0.0.1:55680`）。
+- 模型和推理强度改在 workflow dashboard 的 converter profile 配置；模型不可用时接口返回 409，文章按转换失败处理，可在页面重试。
 
 ## 后续（第一版不做）
 

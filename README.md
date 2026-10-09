@@ -4,7 +4,7 @@
 
 1. 在页面上传 SingleFile 导出的 `.html`（可一次多个）。
 2. posts 删除 css 和 js，把内嵌的图片、视频封面等资源存成文件，html 里改为相对路径 `assets/<hash>.<ext>`。
-3. 后台按上传顺序逐篇调用 wf-posts，由 `wf html2md`（gpt-6.1-sol medium）只保留正文转成 Markdown，并给出标题、发布日期和英文 slug。
+3. 后台按上传顺序逐篇调用 workflow 服务的 html2md API，由 `wf html2md`（converter profile，模型和推理强度在 workflow dashboard 配置）只保留正文转成 Markdown，并给出标题、发布日期和英文 slug。
 4. 程序校验 Markdown 里的每段文字都能在原网页中找到，找不到的段落作为警告显示在文章页。
 5. 文章存为 `<data>/<年>/<月>/<id>/<slug>.md`，只保留 Markdown 引用到的资源。可在线阅读、下载 zip、删除，失败后重试。
 
@@ -15,10 +15,9 @@
 | 组件 | 运行方式 | 说明 |
 | --- | --- | --- |
 | posts（`cmd/posts`） | root 的 docker compose | Go + SQLite（无 CGO），前端 embed 进二进制，OIDC 登录逻辑与 homepage 相同 |
-| wf-posts（`cmd/wf-posts`） | 当前用户的 systemd user service | `POST /api/convert` 收 html，执行 `wf html2md`，返回 JSON；串行、无鉴权 |
-| `wf html2md` | wf-posts 的子进程 | 在 `/home/eric/projects/workflow`，使用该用户的 Codex 登录 |
+| workflow（`/home/eric/projects/workflow`） | 当前用户的 systemd user service | `POST /api/v1/workflows/html2md` 收 `{"html": ...}`，执行 `wf html2md`，返回 JSON；串行、无鉴权 |
 
-posts 在容器里，访问宿主机上的 wf-posts 要走 Docker 网络 `my-network` 在宿主机上的网关地址（默认 `172.28.1.1:55680`）。这个地址只有宿主机和该网络里的容器能访问，所以 wf-posts 不做鉴权。
+posts 在容器里，访问宿主机上的 workflow 服务要走 Docker 网络 `my-network` 在宿主机上的网关地址（默认 `172.28.1.1:55680`）。这个地址只有宿主机和该网络里的容器能访问，所以不做鉴权。workflow 的部署、profile 配置和接口文档见它的 README 和 dashboard。
 
 ## 配置
 
@@ -37,25 +36,9 @@ data/              → /app/data
 
 ## 部署
 
-### wf-posts（当前用户）
+### workflow（当前用户）
 
-前提：已 `npm link` 安装 wf，并用同一用户 `codex login`。
-
-```bash
-task run:setup-wf-posts
-```
-
-任务先构建 `build/wf-posts`，再由向导询问 wf 路径、监听地址（自动读取 `my-network` 网关，读不到时默认 `172.28.1.1:55680`）和代理，生成 `~/.config/systemd/user/wf-posts.service` 并启动。
-
-- 开机后在登录前启动：root 执行一次 `loginctl enable-linger <用户名>`。
-- Docker 网络还没创建时绑定会失败，服务每 5 秒重试。
-- 启用了 ufw 时放行容器网段：`ufw allow from 172.28.1.0/24 to any port 55680 proto tcp`。
-- 每次转换在 `/tmp/wf-posts/job-*` 进行，成功后删除；失败的保留，启动时清理 7 天前的残留。
-
-```bash
-systemctl --user status wf-posts.service
-journalctl --user -u wf-posts.service -f
-```
+在 workflow 仓库执行 `task run:setup`，详见其 README。
 
 ### posts（root）
 
@@ -63,7 +46,7 @@ journalctl --user -u wf-posts.service -f
 
 ```bash
 mkdir -p config data && chown -R 65532:65532 config data   # distroless nonroot
-cp config.example.yaml config/config.yaml                  # 修改 public_url、oidc、data_dir、wf_posts.url
+cp config.example.yaml config/config.yaml                  # 修改 public_url、oidc、data_dir、workflow.url
 docker compose up -d
 ```
 
@@ -73,8 +56,8 @@ docker compose up -d
 
 ```bash
 task install:frontend
-cp config.example.yaml config.yaml   # 设置 dev_user，wf_posts.url 改为 http://127.0.0.1:55680
-task run:wf-posts                    # 终端 1
+cp config.example.yaml config.yaml   # 设置 dev_user，workflow.url 改为 http://127.0.0.1:55680
+# 终端 1：在 workflow 仓库执行 task run:server
 task run:server                      # 终端 2
 task run:web                         # 终端 3，打开 http://localhost:5173
 ```

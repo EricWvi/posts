@@ -1,4 +1,4 @@
-// Package convert talks to the wf-posts bridge.
+// Package convert calls the html2md API of the workflow service.
 package convert
 
 import (
@@ -47,47 +47,56 @@ func (a Article) validate() error {
 	return nil
 }
 
-// Client calls POST /api/convert on the bridge.
+// Client calls POST /api/v1/workflows/html2md on the workflow service.
 type Client struct {
 	url  string
 	http *http.Client
 }
 
-// New returns a client for the bridge at baseURL. Timeout bounds one
-// conversion.
+// New returns a client for the workflow service at baseURL. Timeout
+// bounds one conversion.
 func New(baseURL string, timeout time.Duration) *Client {
 	return &Client{
-		url:  strings.TrimSuffix(baseURL, "/") + "/api/convert",
+		url:  strings.TrimSuffix(baseURL, "/") + "/api/v1/workflows/html2md",
 		http: &http.Client{Timeout: timeout},
 	}
 }
 
 // Convert sends cleaned html and returns the validated article.
 func (c *Client) Convert(ctx context.Context, html []byte) (Article, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, bytes.NewReader(html))
+	// Unescaped < and > keep the request close to the size of the page.
+	var payload bytes.Buffer
+	enc := json.NewEncoder(&payload)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(struct {
+		HTML string `json:"html"`
+	}{string(html)}); err != nil {
+		return Article{}, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, &payload)
 	if err != nil {
 		return Article{}, err
 	}
-	req.Header.Set("Content-Type", "text/html; charset=utf-8")
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return Article{}, fmt.Errorf("无法连接 wf-posts: %w", err)
+		return Article{}, fmt.Errorf("无法连接 workflow 服务: %w", err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
 	if err != nil {
-		return Article{}, fmt.Errorf("读取 wf-posts 响应: %w", err)
+		return Article{}, fmt.Errorf("读取 workflow 响应: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		var e struct{ Error string }
 		if json.Unmarshal(body, &e) == nil && e.Error != "" {
-			return Article{}, fmt.Errorf("wf-posts %d: %s", resp.StatusCode, e.Error)
+			return Article{}, fmt.Errorf("workflow %d: %s", resp.StatusCode, e.Error)
 		}
-		return Article{}, fmt.Errorf("wf-posts %d", resp.StatusCode)
+		return Article{}, fmt.Errorf("workflow %d", resp.StatusCode)
 	}
 	var a Article
 	if err := json.Unmarshal(body, &a); err != nil {
-		return Article{}, fmt.Errorf("wf-posts 响应不是合法 JSON: %w", err)
+		return Article{}, fmt.Errorf("workflow 响应不是合法 JSON: %w", err)
 	}
 	a.Title = strings.TrimSpace(a.Title)
 	return a, a.validate()

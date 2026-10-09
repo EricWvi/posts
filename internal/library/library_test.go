@@ -177,11 +177,11 @@ func TestConversionPlacesPostByPublishedDate(t *testing.T) {
 
 func TestFailedConversionKeepsWorkAndCanBeRetried(t *testing.T) {
 	e := newEnv(t)
-	e.conv.set(convert.Article{}, errors.New("wf-posts 502: boom"))
+	e.conv.set(convert.Article{}, errors.New("workflow 502: boom"))
 	e.run(t)
 	p, _ := e.lib.Upload(context.Background(), e.user, page, "")
 	failed := e.wait(t, p.ID, store.StatusFailed)
-	if failed.Error != "wf-posts 502: boom" || !exists(filepath.Join(e.lib.workDir(p.ID), "index.html")) {
+	if failed.Error != "workflow 502: boom" || !exists(filepath.Join(e.lib.workDir(p.ID), "index.html")) {
 		t.Fatalf("post = %+v", failed)
 	}
 	e.conv.set(article, nil)

@@ -59,7 +59,7 @@ func run(configPath string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	conv := convert.New(cfg.WfPosts.URL, time.Duration(cfg.WfPosts.Timeout))
+	conv := convert.New(cfg.Workflow.URL, time.Duration(cfg.Workflow.Timeout))
 	lib, err := library.New(ctx, st, cfg.DataDir, conv)
 	if err != nil {
 		return err
@@ -95,7 +95,7 @@ func run(configPath string) error {
 	errc := make(chan error, 1)
 	go func() {
 		slog.Info("listening", "addr", cfg.Listen, "database", cfg.Database, "data_dir", cfg.DataDir,
-			"wf_posts", cfg.WfPosts.URL, "version", version)
+			"workflow", cfg.Workflow.URL, "version", version)
 		errc <- srv.ListenAndServe()
 	}()
 

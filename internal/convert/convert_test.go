@@ -14,7 +14,8 @@ func serve(t *testing.T, status int, body string) *Client {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got, _ := io.ReadAll(r.Body)
-		if r.Method != "POST" || r.URL.Path != "/api/convert" || string(got) != "<p>x</p>" {
+		if r.Method != "POST" || r.URL.Path != "/api/v1/workflows/html2md" || r.Header.Get("Content-Type") != "application/json" ||
+			strings.TrimSpace(string(got)) != `{"html":"<p>x</p>"}` {
 			t.Errorf("request %s %s %q", r.Method, r.URL.Path, got)
 		}
 		w.WriteHeader(status)
@@ -25,7 +26,7 @@ func serve(t *testing.T, status int, body string) *Client {
 }
 
 func TestConvert(t *testing.T) {
-	c := serve(t, 200, `{"title":" T ","published_date":"2026-01-02","slug":"a-b-1","markdown":"# T"}`)
+	c := serve(t, 200, `{"title":" T ","published_date":"2026-01-02","slug":"a-b-1","markdown":"# T","session_id":"s"}`)
 	a, err := c.Convert(context.Background(), []byte("<p>x</p>"))
 	if err != nil || a != (Article{Title: "T", PublishedDate: "2026-01-02", Slug: "a-b-1", Markdown: "# T"}) {
 		t.Fatalf("article %+v, err %v", a, err)
@@ -48,8 +49,8 @@ func TestConvertRejectsUnsafeOutput(t *testing.T) {
 	}
 }
 
-func TestConvertReportsBridgeError(t *testing.T) {
-	_, err := serve(t, 502, `{"error":"wf 失败: boom"}`).Convert(context.Background(), []byte("<p>x</p>"))
+func TestConvertReportsServiceError(t *testing.T) {
+	_, err := serve(t, 502, `{"error":"wf html2md 失败: boom","code":"workflow_failed"}`).Convert(context.Background(), []byte("<p>x</p>"))
 	if err == nil || !strings.Contains(err.Error(), "502") || !strings.Contains(err.Error(), "boom") {
 		t.Fatalf("err = %v", err)
 	}
