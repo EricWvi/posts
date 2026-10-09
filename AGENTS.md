@@ -1,7 +1,5 @@
 # AGENTS.md
 
-需求和分阶段计划见 `docs/todos.md`。
-
 ## Commands
 
 Project commands live in `Taskfile.yml`; run `task --list` to see them all.
