@@ -33,3 +33,9 @@ packages/contracts/.test-dist/
 *.tsbuildinfo
 
 /memories
+
+/config.yaml
+*.db
+*.db-shm
+*.db-wal
+/release/

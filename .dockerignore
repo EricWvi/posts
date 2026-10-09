@@ -1,0 +1,12 @@
+.git
+.github
+**/node_modules
+frontend/dist
+release
+data
+.data
+memories
+*.log
+*.db
+config.yaml
+testdata

@@ -49,15 +49,15 @@ posts 运行在容器里，容器内的 `127.0.0.1` 不是宿主机，所以 wf-
 
 ## 阶段 0：项目骨架
 
-- [ ] `go.mod`、`cmd/posts`、`cmd/wf-posts`、`internal/` 目录。
-- [ ] `frontend/`：vite + React 19 + shadcn + React Query + zustand，TypeScript。
-- [ ] `Taskfile.yml`：install / build / format / lint / test / run:server / run:web / run:wf-posts，命名参照 homepage。
-- [ ] `AGENTS.md`：记录常用命令。
-- [ ] `config.example.yaml`：在 homepage 配置基础上调整和新增以下字段：
+- [x] `go.mod`、`cmd/posts`、`cmd/wf-posts`、`internal/` 目录。
+- [x] `frontend/`：vite + React 19 + shadcn + React Query + zustand，TypeScript。
+- [x] `Taskfile.yml`：install / build / format / lint / test / run:server / run:web / run:wf-posts，命名参照 homepage。
+- [x] `AGENTS.md`：记录常用命令。
+- [x] `config.example.yaml`：在 homepage 配置基础上调整和新增以下字段：
   - `data_dir`：文章目录。
   - `database`：默认放在配置文件所在目录的 `posts.db`。
   - `wf_posts.url`、`wf_posts.timeout`、`max_upload_size`。
-- [ ] `.gitignore` / `.dockerignore`：忽略 `config.yaml`、`*.db`、`data/`、`frontend/dist`、样例 html。
+- [x] `.gitignore` / `.dockerignore`：忽略 `config.yaml`、`*.db`、`data/`、`frontend/dist`、样例 html。
 
 ## 阶段 1：html 清洗与资源提取（`internal/singlefile`，纯函数）
 

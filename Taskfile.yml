@@ -1,0 +1,124 @@
+version: "3"
+
+tasks:
+  default:
+    cmds:
+      - task: list
+
+  list:
+    desc: List all tasks in the current project
+    cmds:
+      - task --list
+
+  ###################################################
+  ############## Install Dependencies ###############
+  ###################################################
+
+  install:frontend:
+    desc: Install locked frontend dependencies (Node 24+)
+    dir: frontend
+    cmds:
+      - npm ci
+
+  install:go:
+    desc: Download Go module dependencies
+    cmds:
+      - go mod download
+
+  ###################################################
+  ############## Clean and Build Tasks ##############
+  ###################################################
+
+  build:
+    desc: Build the release binary with the frontend embedded (release/posts)
+    cmds:
+      - ./scripts/build.sh
+
+  build:frontend:
+    desc: Build the frontend static dist
+    dir: frontend
+    cmds:
+      - npm run build
+
+  build:go:
+    desc: Compile all Go packages
+    cmds:
+      - go build ./...
+
+  build:wf-posts:
+    desc: Build the wf-posts bridge binary (release/wf-posts)
+    cmds:
+      - mkdir -p release
+      - CGO_ENABLED=0 go build -trimpath -o release/wf-posts ./cmd/wf-posts
+
+  clean:
+    desc: Remove release binaries and the built frontend dist
+    cmds:
+      - rm -rf release
+      - find frontend/dist -mindepth 1 ! -name .gitkeep -delete
+
+  format:
+    desc: Format all Go sources
+    cmds:
+      - task: format:go
+
+  format:go:
+    desc: Format Go sources with gofmt
+    cmds:
+      - gofmt -w cmd internal posts.go
+
+  lint:
+    desc: Run all linters
+    cmds:
+      - task: lint:frontend
+      - task: lint:go
+
+  lint:frontend:
+    desc: Typecheck frontend source
+    dir: frontend
+    cmds:
+      - npm run typecheck
+
+  lint:go:
+    desc: Check gofmt and run go vet
+    silent: true
+    cmds:
+      - |
+        unformatted=$(gofmt -l cmd internal posts.go)
+        if [ -n "$unformatted" ]; then
+          echo "gofmt needed (run task format):"
+          echo "$unformatted"
+          exit 1
+        fi
+      - go vet ./...
+
+  test:
+    desc: Run all lint and unit tests
+    cmds:
+      - task: lint
+      - task: test:go
+
+  test:go:
+    desc: Run Go unit and HTTP tests
+    cmds:
+      - go test ./...
+
+  ###################################################
+  ############# Run Development Servers #############
+  ###################################################
+
+  run:web:
+    desc: Start the Vite frontend development server
+    dir: frontend
+    cmds:
+      - npm run dev
+
+  run:server:
+    desc: Run the posts server with config.yaml in the project root
+    cmds:
+      - go run ./cmd/posts {{.CLI_ARGS}}
+
+  run:wf-posts:
+    desc: Run the wf-posts bridge on 127.0.0.1:55680
+    cmds:
+      - go run ./cmd/wf-posts -listen 127.0.0.1:55680 {{.CLI_ARGS}}
