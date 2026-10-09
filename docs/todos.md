@@ -32,6 +32,9 @@
   - **保留 `class`**：全 div 布局的页面要靠 class 判断结构，也有助于模型区分正文和导航。
   - **删除 `data-*`**：对判断结构帮助不大。删除前先确认资源已在 `src`/`poster` 等标准属性中，不依赖 `data-src`。
   - 清洗阶段不删除 nav、header、aside 等节点，交给模型按 prompt 判断正文范围。
+  - 删除 SingleFile 标记为隐藏（class `sf-hidden`）的元素：保存时页面上就没显示，去掉 css 后反而会冒出来。
+  - 保留 `<script type=application/ld+json>` 和具名 `<meta>`：是元数据不是 js，有助于模型判断标题和发布日期。
+  - 声明式 shadow DOM（`<template shadowrootmode>`）展开为普通子节点。
 - **长文章**：第一版不分段，整篇交给模型。失败就标记为失败，分段放到后续阶段。
 - **内容校验**：程序校验 md 中的每段文本都能在 html 纯文本中找到（归一化空白和标点后），以此发现模型改写或编造的内容。被舍弃的导航区域不计入差异。不通过时标记警告并展示差异。
 - **前端功能**：上传、文章列表、在线阅读 md、下载 zip、删除、失败重试。中文界面。
@@ -61,14 +64,14 @@ posts 运行在容器里，容器内的 `127.0.0.1` 不是宿主机，所以 wf-
 
 ## 阶段 1：html 清洗与资源提取（`internal/singlefile`，纯函数）
 
-- [ ] 解析 SingleFile 头部注释，取原始 `url`、`saved date`。
-- [ ] 按上面的清洗范围删除 css/js 相关节点和属性。
-- [ ] 提取 `data:` 资源：`img[src|srcset]`、`video[src|poster]`、`source[src|srcset]`、`audio`、`picture`、`a[href]` 等。
+- [x] 解析 SingleFile 头部注释，取原始 `url`、`saved date`。
+- [x] 按上面的清洗范围删除 css/js 相关节点和属性。
+- [x] 提取 `data:` 资源：`img[src|srcset]`、`video[src|poster]`、`source[src|srcset]`、`audio`、`picture`、`a[href]` 等。
   - 文件名用内容 sha256 前缀加 mime 推断的扩展名，同内容去重。
   - html 中改写为相对路径 `assets/<name>`。
-- [ ] 输出清洗后的 html 和资源列表，不直接写盘，方便测试。
-- [ ] 把仓库根目录的样例 `Plugin Extensions – Plugins ｜ OpenAI Developers.html` 移到 fixture 目录，改成不含空格和全角字符的文件名（如 `openai-plugin-extensions.html`）。
-- [ ] 测试：用这个样例（必要时裁剪成小 fixture）覆盖 img/webp/svg/png、video poster、mp4 source、字体丢弃、内联 svg 删除、data-* 删除、class 保留。
+- [x] 输出清洗后的 html 和资源列表，不直接写盘，方便测试。
+- [x] 把仓库根目录的样例 `Plugin Extensions – Plugins ｜ OpenAI Developers.html` 移到 fixture 目录，改成不含空格和全角字符的文件名（如 `openai-plugin-extensions.html`）。
+- [x] 测试：用这个样例（必要时裁剪成小 fixture）覆盖 img/webp/svg/png、video poster、mp4 source、字体丢弃、内联 svg 删除、data-* 删除、class 保留。
 
 ## 阶段 2：wf `html2md` 工作流（workflow 仓库）
 
