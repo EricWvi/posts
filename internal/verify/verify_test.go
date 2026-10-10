@@ -47,22 +47,41 @@ func TestChangedTextIsReported(t *testing.T) {
 	md := "# Hello, world\n\nSome text with a link that wraps and snake_case.\n\n" +
 		"This sentence was invented.\n\n```\nconst x = 2;\n```\n"
 	r := check(t, page, md)
-	if r.OK() || r.UnmatchedCount != 2 || r.Unmatched[0] != "This sentence was invented." || r.Unmatched[1] != "const x = 2;" {
+	if r.OK() || len(r.Unmatched) != 2 || r.Unmatched[0] != "This sentence was invented." || r.Unmatched[1] != "const x = 2;" {
 		t.Fatalf("report = %+v", r)
 	}
 }
 
-func TestReportIsBounded(t *testing.T) {
+func TestReportListsEveryBlockInFull(t *testing.T) {
 	var md strings.Builder
-	for range maxReported + 5 {
-		md.WriteString(strings.Repeat("made up ", 100) + "\n\n")
+	long := strings.Repeat("made up ", 100)
+	for range 30 {
+		md.WriteString(long + "\n\n")
 	}
 	r := check(t, page, md.String())
-	if r.UnmatchedCount != maxReported+5 || len(r.Unmatched) != maxReported {
-		t.Fatalf("count %d listed %d", r.UnmatchedCount, len(r.Unmatched))
+	if len(r.Unmatched) != 30 || r.Unmatched[0] != long {
+		t.Fatalf("listed %d, first %q", len(r.Unmatched), r.Unmatched[0])
 	}
-	if n := len([]rune(r.Unmatched[0])); n != maxExcerpt+1 {
-		t.Fatalf("excerpt length %d", n)
+}
+
+// KaTeX renders each formula twice, as MathML carrying the TeX source and
+// as styled spans, and the Markdown keeps only the TeX.
+const katexPage = `<html><body><article>
+<p>The area is <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>r</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">r^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord"><span class="mord mathnormal">r</span><span class="msupsub"><span class="mord mtight">2</span></span></span></span></span></span> times pi.</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math display="block"><semantics><mrow><mfrac><mi>a</mi><mi>b</mi></mfrac><mo>&lt;</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">\frac{a}{b} &lt; 1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="mord"><span class="mfrac">ab</span></span><span class="mrel">&lt;</span><span class="mord">1</span></span></span></span></p>
+</article></body></html>`
+
+func TestFormulasMatchTheirTeXSource(t *testing.T) {
+	cleaned, err := singlefile.Clean([]byte(katexPage))
+	if err != nil {
+		t.Fatal(err)
+	}
+	md := "The area is $r^2$ times pi.\n\n$$\n\\frac{a}{b} < 1\n$$\n"
+	if r, _ := Check(cleaned.HTML, md); !r.OK() || r.Checked != 2 {
+		t.Fatalf("report = %+v", r)
+	}
+	if r, _ := Check(cleaned.HTML, "The area is $r^3$ times pi.\n"); r.OK() {
+		t.Fatal("changed formula passed")
 	}
 }
 
@@ -92,7 +111,7 @@ func TestSampleConversion(t *testing.T) {
 	}
 	tampered := strings.Replace(article.Markdown, "Declaring support for an extension takes just a few lines",
 		"Declaring support for an extension takes only a few lines", 1)
-	if r, _ := Check(cleaned.HTML, tampered); r.UnmatchedCount != 1 {
+	if r, _ := Check(cleaned.HTML, tampered); len(r.Unmatched) != 1 {
 		t.Fatalf("tampered report = %+v", r)
 	}
 }

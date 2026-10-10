@@ -3,9 +3,10 @@ export type PostStatus = "uploading" | "queued" | "converting" | "done" | "faile
 /** Report of Markdown blocks that are not text on the original page. */
 export type ContentWarning = {
   checked: number;
-  unmatchedCount: number;
-  /** The first unmatched blocks, shortened. */
+  /** Every unmatched block, as written in the Markdown. */
   unmatched: string[];
+  /** Only in reports from before every block was listed, which kept the first ones, shortened. */
+  unmatchedCount?: number;
 };
 
 export type Post = {

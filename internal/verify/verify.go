@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"html"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -20,25 +21,17 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-const (
-	// maxReported caps how many unmatched blocks a report lists.
-	maxReported = 20
-	// maxExcerpt caps the length of one listed block, in runes.
-	maxExcerpt = 300
-)
-
 // Report is the outcome of a check.
 type Report struct {
 	// Checked is the number of Markdown blocks that carry text.
 	Checked int `json:"checked"`
-	// UnmatchedCount is the number of blocks not found on the page.
-	UnmatchedCount int `json:"unmatchedCount"`
-	// Unmatched lists the first of those blocks, shortened.
+	// Unmatched lists every block not found on the page, as written in the
+	// Markdown, so the user can judge each of them.
 	Unmatched []string `json:"unmatched"`
 }
 
 // OK reports whether every block was found on the page.
-func (r Report) OK() bool { return r.UnmatchedCount == 0 }
+func (r Report) OK() bool { return len(r.Unmatched) == 0 }
 
 // Check looks for every text block of markdown in the page html.
 //
@@ -60,16 +53,17 @@ func Check(page []byte, markdown string) (Report, error) {
 		if strings.Contains(text, key) {
 			continue
 		}
-		report.UnmatchedCount++
-		if len(report.Unmatched) < maxReported {
-			report.Unmatched = append(report.Unmatched, excerpt(block.raw))
-		}
+		report.Unmatched = append(report.Unmatched, block.raw)
 	}
 	return report, nil
 }
 
 // pageText is the normalized text of every text node outside scripts and
 // styles, in document order.
+//
+// A formula appears on the page twice, rendered and as MathML, while the
+// Markdown has it once, as TeX. Formulas that carry their TeX source, as
+// KaTeX's do, contribute only that source.
 func pageText(page []byte) (string, error) {
 	doc, err := nethtml.Parse(bytes.NewReader(page))
 	if err != nil {
@@ -81,6 +75,10 @@ func pageText(page []byte) (string, error) {
 		if n.Type == nethtml.ElementNode && (n.DataAtom == atom.Script || n.DataAtom == atom.Style) {
 			return
 		}
+		if tex, ok := texSource(n); ok {
+			b.WriteString(tex)
+			return
+		}
 		if n.Type == nethtml.TextNode {
 			b.WriteString(n.Data)
 		}
@@ -90,6 +88,35 @@ func pageText(page []byte) (string, error) {
 	}
 	walk(doc)
 	return normalize(b.String()), nil
+}
+
+// texSource returns the TeX source of a KaTeX formula or a MathML <math>
+// element, if n is one that has it.
+func texSource(n *nethtml.Node) (string, bool) {
+	if n.Type != nethtml.ElementNode || !(n.Data == "math" || slices.Contains(strings.Fields(attr(n, "class")), "katex")) {
+		return "", false
+	}
+	for d := range n.Descendants() {
+		if d.Type == nethtml.ElementNode && d.Data == "annotation" && attr(d, "encoding") == "application/x-tex" {
+			var b strings.Builder
+			for t := range d.Descendants() {
+				if t.Type == nethtml.TextNode {
+					b.WriteString(t.Data)
+				}
+			}
+			return b.String(), true
+		}
+	}
+	return "", false
+}
+
+func attr(n *nethtml.Node, key string) string {
+	for _, a := range n.Attr {
+		if a.Namespace == "" && a.Key == key {
+			return a.Val
+		}
+	}
+	return ""
 }
 
 type block struct {
@@ -165,12 +192,4 @@ func normalize(s string) string {
 		}
 	}
 	return b.String()
-}
-
-func excerpt(s string) string {
-	r := []rune(s)
-	if len(r) <= maxExcerpt {
-		return s
-	}
-	return string(r[:maxExcerpt]) + "…"
 }

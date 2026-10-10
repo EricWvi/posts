@@ -80,11 +80,12 @@ export function PostPage({ id }: { id: number }) {
 }
 
 function WarningPanel({ warning }: { warning: ContentWarning }) {
+  const count = warning.unmatchedCount ?? warning.unmatched.length;
   return (
     <details className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
       <summary className="flex cursor-pointer items-center gap-2 font-medium">
         <TriangleAlert className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-        内容校验：{warning.checked} 段文字中有 {warning.unmatchedCount} 段在原网页中找不到，可能被模型改写
+        内容校验：{warning.checked} 段文字中有 {count} 段在原网页中找不到，可能被模型改写
       </summary>
       <ul className="mt-3 space-y-2">
         {warning.unmatched.map((text, i) => (
@@ -93,7 +94,7 @@ function WarningPanel({ warning }: { warning: ContentWarning }) {
           </li>
         ))}
       </ul>
-      {warning.unmatchedCount > warning.unmatched.length && (
+      {count > warning.unmatched.length && (
         <p className="mt-2 text-xs text-muted-foreground">只列出前 {warning.unmatched.length} 段。</p>
       )}
     </details>
