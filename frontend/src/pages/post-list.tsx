@@ -52,7 +52,7 @@ function PostRow({ post }: { post: Post }) {
     <li className="flex items-center gap-3 px-4 py-3">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          {post.status === "done" ? (
+          {post.status !== "uploading" ? (
             <Link href={`/posts/${post.id}`} className="truncate font-medium hover:underline">
               {post.title}
             </Link>

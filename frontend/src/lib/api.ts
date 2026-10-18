@@ -1,4 +1,4 @@
-export type PostStatus = "uploading" | "queued" | "converting" | "done" | "failed";
+export type PostStatus = "uploading" | "ready" | "queued" | "converting" | "done" | "failed";
 
 /** Report of Markdown blocks that are not text on the original page. */
 export type ContentWarning = {
@@ -72,11 +72,13 @@ export const api = {
   posts: () => request<Post[]>("GET", "/api/posts"),
   post: (id: number) => request<Post>("GET", `/api/posts/${id}`),
   markdown: (id: number) => request<string>("GET", `/api/posts/${id}/md`, "text"),
+  start: (id: number) => request<void>("POST", `/api/posts/${id}/convert`),
   retry: (id: number) => request<Post>("POST", `/api/posts/${id}/retry`),
   remove: (id: number) => request<void>("DELETE", `/api/posts/${id}`),
 };
 
 export const assetUrl = (id: number, path: string) => `/api/posts/${id}/${path}`;
+export const originalUrl = (id: number) => `/api/posts/${id}/html`;
 export const zipUrl = (id: number) => `/api/posts/${id}/zip`;
 
 /** Uploads html files, reporting the fraction sent so far. */

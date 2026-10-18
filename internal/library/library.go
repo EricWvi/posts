@@ -2,6 +2,7 @@
 //
 // Layout under the data directory:
 //
+//	.work/<id>/original.html      original upload, kept until conversion succeeds
 //	.work/<id>/index.html         cleaned page waiting for (or failed) conversion
 //	.work/<id>/assets/<name>      media extracted from the page
 //	<year>/<month>/<id>/<slug>.md converted post
@@ -80,10 +81,10 @@ func (l *Library) workDir(id int64) string {
 	return filepath.Join(l.workRoot(), strconv.FormatInt(id, 10))
 }
 
-// Upload cleans a SingleFile page, stores it and queues its conversion.
+// Upload saves the original SingleFile page for preview without starting conversion.
 // fallbackTitle names the post when the page has no <title>.
 func (l *Library) Upload(ctx context.Context, userID int64, src []byte, fallbackTitle string) (store.Post, error) {
-	page, err := singlefile.Clean(src)
+	page, err := singlefile.Inspect(src)
 	if err != nil {
 		return store.Post{}, fmt.Errorf("%w: 无法解析 html", store.ErrInvalid)
 	}
@@ -95,17 +96,43 @@ func (l *Library) Upload(ctx context.Context, userID int64, src []byte, fallback
 	if err != nil {
 		return store.Post{}, err
 	}
-	if err := l.writeWork(p.ID, page); err != nil {
+	if err := l.writeOriginal(p.ID, src); err != nil {
 		os.RemoveAll(l.workDir(p.ID))
 		l.store.RemoveAbandoned(context.WithoutCancel(ctx), p.ID)
 		return store.Post{}, err
 	}
-	if err := l.store.Enqueue(ctx, p.ID); err != nil {
+	if err := l.store.CompleteUpload(ctx, p.ID); err != nil {
 		return store.Post{}, err
 	}
-	l.notify()
-	p.Status = store.StatusQueued
+	p.Status = store.StatusReady
 	return p, nil
+}
+
+func (l *Library) writeOriginal(id int64, src []byte) error {
+	if err := os.MkdirAll(l.workDir(id), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(l.workDir(id), "original.html"), src, 0o644)
+}
+
+// Start queues a ready page owned by the user. The worker does the cleaning.
+func (l *Library) Start(ctx context.Context, userID, id int64) error {
+	if _, err := l.store.Post(ctx, userID, id); err != nil {
+		return err
+	}
+	if err := l.store.Enqueue(ctx, id); err != nil {
+		return err
+	}
+	l.notify()
+	return nil
+}
+
+// OriginalFile returns the original upload while it is awaiting conversion.
+func (l *Library) OriginalFile(p store.Post) (string, error) {
+	if p.Status == store.StatusDone || p.Status == store.StatusUploading {
+		return "", store.ErrNotFound
+	}
+	return filepath.Join(l.workDir(p.ID), "original.html"), nil
 }
 
 func (l *Library) writeWork(id int64, page singlefile.Page) error {
@@ -279,6 +306,19 @@ func (l *Library) process(ctx context.Context, p store.Post) {
 // convert runs the conversion and writes the post to its final directory.
 func (l *Library) convert(ctx context.Context, p store.Post) (store.Converted, error) {
 	work := l.workDir(p.ID)
+	// Old queued/failed posts only have index.html; keep them retryable.
+	original, err := os.ReadFile(filepath.Join(work, "original.html"))
+	if err == nil {
+		page, err := singlefile.Clean(original)
+		if err != nil {
+			return store.Converted{}, fmt.Errorf("清洗页面: %w", err)
+		}
+		if err := l.writeWork(p.ID, page); err != nil {
+			return store.Converted{}, fmt.Errorf("保存清洗结果: %w", err)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return store.Converted{}, fmt.Errorf("读取原始页面: %w", err)
+	}
 	html, err := os.ReadFile(filepath.Join(work, "index.html"))
 	if err != nil {
 		return store.Converted{}, fmt.Errorf("读取待转换页面: %w", err)

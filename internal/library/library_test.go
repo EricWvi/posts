@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"posts/internal/convert"
+	"posts/internal/singlefile"
 	"posts/internal/store"
 )
 
@@ -124,22 +125,34 @@ func names(t *testing.T, dir string) []string {
 	return out
 }
 
-func TestUploadQueuesCleanedPage(t *testing.T) {
+func TestUploadPreservesOriginalUntilStarted(t *testing.T) {
 	e := newEnv(t)
 	p, err := e.lib.Upload(context.Background(), e.user, page, "file.html")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Status != store.StatusQueued || p.Title != "Hello | Blog" || p.SourceURL != "https://blog.test/hello" || p.SavedAt == nil {
+	if p.Status != store.StatusReady || p.Title != "Hello | Blog" || p.SourceURL != "https://blog.test/hello" || p.SavedAt == nil {
 		t.Fatalf("post = %+v", p)
 	}
-	work := e.lib.workDir(p.ID)
-	html, err := os.ReadFile(filepath.Join(work, "index.html"))
-	if err != nil || bytes.Contains(html, []byte("<style")) || !bytes.Contains(html, []byte("assets/"+photoName)) {
-		t.Fatalf("index.html = %s, %v", html, err)
+	file, err := e.lib.OriginalFile(p)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := names(t, filepath.Join(work, "assets")); !slices.Equal(got, []string{logoName, photoName}) {
-		t.Fatalf("assets = %v", got)
+	original, err := os.ReadFile(file)
+	if err != nil || !bytes.Equal(original, page) {
+		t.Fatalf("original changed: %v", err)
+	}
+	if got := names(t, e.lib.workDir(p.ID)); !slices.Equal(got, []string{"original.html"}) {
+		t.Fatalf("upload cleaned prematurely: %v", got)
+	}
+	if _, err := e.st.ClaimNext(context.Background()); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("ready post claimed: %v", err)
+	}
+	if _, err := New(context.Background(), e.st, e.dir, e.conv); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := e.st.Post(context.Background(), e.user, p.ID); got.Status != store.StatusReady {
+		t.Fatalf("ready state lost after restart: %+v", got)
 	}
 }
 
@@ -148,6 +161,9 @@ func TestConversionPlacesPostByPublishedDate(t *testing.T) {
 	e.conv.set(article, nil)
 	e.run(t)
 	p, _ := e.lib.Upload(context.Background(), e.user, page, "")
+	if err := e.lib.Start(context.Background(), e.user, p.ID); err != nil {
+		t.Fatal(err)
+	}
 	done := e.wait(t, p.ID, store.StatusDone)
 
 	rel := "2025/03/" + itoa(p.ID)
@@ -180,6 +196,9 @@ func TestFailedConversionKeepsWorkAndCanBeRetried(t *testing.T) {
 	e.conv.set(convert.Article{}, errors.New("workflow 502: boom"))
 	e.run(t)
 	p, _ := e.lib.Upload(context.Background(), e.user, page, "")
+	if err := e.lib.Start(context.Background(), e.user, p.ID); err != nil {
+		t.Fatal(err)
+	}
 	failed := e.wait(t, p.ID, store.StatusFailed)
 	if failed.Error != "workflow 502: boom" || !exists(filepath.Join(e.lib.workDir(p.ID), "index.html")) {
 		t.Fatalf("post = %+v", failed)
@@ -200,6 +219,9 @@ func TestInventedTextIsFlagged(t *testing.T) {
 	e.conv.set(invented, nil)
 	e.run(t)
 	p, _ := e.lib.Upload(context.Background(), e.user, page, "")
+	if err := e.lib.Start(context.Background(), e.user, p.ID); err != nil {
+		t.Fatal(err)
+	}
 	done := e.wait(t, p.ID, store.StatusDone)
 	if !bytes.Contains(done.Warning, []byte("A sentence the page never had.")) {
 		t.Fatalf("warning = %s", done.Warning)
@@ -211,6 +233,9 @@ func TestDeleteRemovesFiles(t *testing.T) {
 	e.conv.set(article, nil)
 	e.run(t)
 	p, _ := e.lib.Upload(context.Background(), e.user, page, "")
+	if err := e.lib.Start(context.Background(), e.user, p.ID); err != nil {
+		t.Fatal(err)
+	}
 	done := e.wait(t, p.ID, store.StatusDone)
 	if err := e.lib.Delete(context.Background(), e.user, p.ID); err != nil {
 		t.Fatal(err)
@@ -228,6 +253,9 @@ func TestZip(t *testing.T) {
 	e.conv.set(article, nil)
 	e.run(t)
 	p, _ := e.lib.Upload(context.Background(), e.user, page, "")
+	if err := e.lib.Start(context.Background(), e.user, p.ID); err != nil {
+		t.Fatal(err)
+	}
 	done := e.wait(t, p.ID, store.StatusDone)
 	var buf bytes.Buffer
 	if err := e.lib.WriteZip(&buf, done); err != nil {
@@ -252,6 +280,9 @@ func TestNewDropsAbandonedUploadsAndRequeuesConversions(t *testing.T) {
 	cut, _ := e.st.CreatePost(ctx, e.user, store.NewPost{Title: "cut"})
 	os.MkdirAll(e.lib.workDir(cut.ID), 0o755)
 	p, _ := e.lib.Upload(ctx, e.user, page, "")
+	if err := e.lib.Start(ctx, e.user, p.ID); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := e.st.ClaimNext(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -272,3 +303,56 @@ func TestNewDropsAbandonedUploadsAndRequeuesConversions(t *testing.T) {
 func exists(path string) bool { _, err := os.Stat(path); return err == nil }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+func TestStartChecksOwnershipAndRejectsDuplicateRequests(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	p, err := e.lib.Upload(ctx, e.user, page, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := e.st.UpsertUser(ctx, store.Identity{Issuer: "i", Subject: "bob"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.lib.Start(ctx, other.ID, p.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("another user started conversion: %v", err)
+	}
+	if err := e.lib.Start(ctx, e.user, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.lib.Start(ctx, e.user, p.ID); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("duplicate start accepted: %v", err)
+	}
+	if err := e.lib.Delete(ctx, e.user, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if exists(e.lib.workDir(p.ID)) {
+		t.Fatal("original kept after deletion")
+	}
+}
+
+func TestLegacyCleanedPageStillConverts(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	p, err := e.lib.Upload(ctx, e.user, page, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleaned, err := singlefile.Clean(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.lib.writeWork(p.ID, cleaned); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(e.lib.workDir(p.ID), "original.html")); err != nil {
+		t.Fatal(err)
+	}
+	e.conv.set(article, nil)
+	e.run(t)
+	if err := e.lib.Start(ctx, e.user, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	e.wait(t, p.ID, store.StatusDone)
+}

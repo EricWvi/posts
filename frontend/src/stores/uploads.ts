@@ -15,7 +15,7 @@ export type UploadBatch = {
 
 type UploadsState = {
   batches: UploadBatch[];
-  /** Sends the files and resolves once the server has queued them. */
+  /** Sends the files and resolves once the server has saved them. */
   send: (files: File[]) => Promise<UploadResult | null>;
   dismiss: (id: number) => void;
 };

@@ -10,9 +10,9 @@ import (
 
 // Status is where a post is in its life cycle:
 //
-//	uploading → queued → converting → done
-//	                 ↖               ↘
-//	                   ─── failed ←──
+//	uploading → ready → queued → converting → done
+//	                  ↑                       ↓
+//	                  └──────── failed ←───────┘
 //
 // A post is uploading only while its files are being written; one left in
 // that state was cut off by a restart.
@@ -20,6 +20,7 @@ type Status string
 
 const (
 	StatusUploading  Status = "uploading"
+	StatusReady      Status = "ready"
 	StatusQueued     Status = "queued"
 	StatusConverting Status = "converting"
 	StatusDone       Status = "done"
@@ -114,9 +115,14 @@ func (s *Store) CreatePost(ctx context.Context, userID int64, in NewPost) (Post,
 	return s.post(ctx, `WHERE id = ?`, id)
 }
 
-// Enqueue moves a post whose files are in place from uploading to queued.
+// CompleteUpload marks a saved original page as ready for preview.
+func (s *Store) CompleteUpload(ctx context.Context, id int64) error {
+	return s.transition(ctx, id, StatusUploading, StatusReady, `status = ?`, StatusReady)
+}
+
+// Enqueue starts conversion of a ready post.
 func (s *Store) Enqueue(ctx context.Context, id int64) error {
-	return s.transition(ctx, id, StatusUploading, StatusQueued, `status = ?`, StatusQueued)
+	return s.transition(ctx, id, StatusReady, StatusQueued, `status = ?`, StatusQueued)
 }
 
 // AbandonedUploads lists the posts a restart cut off while uploading.
@@ -191,9 +197,9 @@ func (s *Store) transition(ctx context.Context, id int64, from, to Status, set s
 	return nil
 }
 
-// Posts lists the user's posts, newest upload first.
+// Posts lists posts by publication date, falling back to upload date until known.
 func (s *Store) Posts(ctx context.Context, userID int64) ([]Post, error) {
-	return s.posts(ctx, `WHERE user_id = ? ORDER BY id DESC`, userID)
+	return s.posts(ctx, `WHERE user_id = ? ORDER BY COALESCE(NULLIF(published_date, ''), date(uploaded_at, 'unixepoch')) DESC, id DESC`, userID)
 }
 
 // Post returns one of the user's posts.

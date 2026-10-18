@@ -52,6 +52,23 @@ type Asset struct {
 	Data      []byte
 }
 
+// Inspect reads metadata without cleaning or extracting resources from the page.
+func Inspect(src []byte) (Page, error) {
+	doc, err := html.Parse(bytes.NewReader(src))
+	if err != nil {
+		return Page{}, fmt.Errorf("parse html: %w", err)
+	}
+	c := &cleaner{}
+	c.readHeader(doc)
+	for n := range doc.Descendants() {
+		if n.Type == html.ElementNode && n.DataAtom == atom.Title {
+			c.title = text(n)
+			break
+		}
+	}
+	return Page{Title: strings.TrimSpace(c.title), SourceURL: c.sourceURL, SavedAt: c.savedAt}, nil
+}
+
 // Clean parses a SingleFile page and returns its cleaned form.
 //
 // It removes:

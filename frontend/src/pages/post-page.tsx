@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { MarkdownView } from "@/components/markdown-view";
+import { OriginalPreview } from "@/components/original-preview";
 import { RetryButton } from "@/components/retry-button";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,8 @@ export function PostPage({ id }: { id: number }) {
 
   if (error) return <Message>{error.message}</Message>;
   if (!post) return <Message>加载中…</Message>;
+
+  if (post.status === "ready") return <OriginalPreview post={post} />;
 
   return (
     <div className="space-y-6">

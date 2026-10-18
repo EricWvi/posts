@@ -38,7 +38,7 @@ export function ConfirmDelete({ post, onDeleted, iconOnly }: { post: Post; onDel
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>删除这篇文章？</AlertDialogTitle>
-          <AlertDialogDescription>「{post.title}」的 Markdown 和图片等资源会一并删除，无法恢复。</AlertDialogDescription>
+          <AlertDialogDescription>「{post.title}」的网页、Markdown 和图片等资源会一并删除，无法恢复。</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>取消</AlertDialogCancel>

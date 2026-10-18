@@ -86,6 +86,9 @@ func TestPostLifecycle(t *testing.T) {
 	if _, err := s.ClaimNext(ctx); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("uploading post was claimed: %v", err)
 	}
+	if err := s.CompleteUpload(ctx, p.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.Enqueue(ctx, p.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -130,6 +133,7 @@ func TestClaimNextTakesOldestQueued(t *testing.T) {
 	var ids []int64
 	for range 3 {
 		p, _ := s.CreatePost(ctx, uid, NewPost{Title: "t"})
+		s.CompleteUpload(ctx, p.ID)
 		s.Enqueue(ctx, p.ID)
 		ids = append(ids, p.ID)
 	}
@@ -151,6 +155,7 @@ func TestDeleteRefusesPostsInProgress(t *testing.T) {
 	if _, err := s.DeletePost(ctx, uid, p.ID); !errors.Is(err, ErrConflict) {
 		t.Fatalf("delete uploading: %v", err)
 	}
+	s.CompleteUpload(ctx, p.ID)
 	s.Enqueue(ctx, p.ID)
 	s.ClaimNext(ctx)
 	if _, err := s.DeletePost(ctx, uid, p.ID); !errors.Is(err, ErrConflict) {
@@ -170,6 +175,7 @@ func TestUsersCannotSeeOrTouchEachOthersPosts(t *testing.T) {
 	ctx := context.Background()
 	alice, bob := newUser(t, s, "alice"), newUser(t, s, "bob")
 	p, _ := s.CreatePost(ctx, alice, NewPost{Title: "secret"})
+	s.CompleteUpload(ctx, p.ID)
 	s.Enqueue(ctx, p.ID)
 	s.ClaimNext(ctx)
 	s.Fail(ctx, p.ID, "x")
@@ -196,6 +202,7 @@ func TestAbandonedUploads(t *testing.T) {
 	uid := newUser(t, s, "alice")
 	cut, _ := s.CreatePost(ctx, uid, NewPost{Title: "cut"})
 	ok, _ := s.CreatePost(ctx, uid, NewPost{Title: "ok"})
+	s.CompleteUpload(ctx, ok.ID)
 	s.Enqueue(ctx, ok.ID)
 	list, err := s.AbandonedUploads(ctx)
 	if err != nil || len(list) != 1 || list[0].ID != cut.ID {
@@ -227,5 +234,34 @@ func TestReopenKeepsData(t *testing.T) {
 	defer s.Close()
 	if list, _ := s.Posts(context.Background(), uid); len(list) != 1 || list[0].Title != "kept" {
 		t.Fatalf("posts = %+v", list)
+	}
+}
+
+func TestPostsSortByPublicationDateWithUploadFallback(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	uid := newUser(t, s, "alice")
+	var ids []int64
+	for _, date := range []string{"2025-08-20", "2025-01-01", "2025-08-20", "", ""} {
+		p, err := s.CreatePost(ctx, uid, NewPost{Title: date})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Freeze the upload date so the fallback is independent of today's date.
+		if _, err := s.db.Exec(`UPDATE posts SET published_date = ?, uploaded_at = ? WHERE id = ?`, date,
+			time.Date(2025, 9, 1, 0, 0, 0, 0, time.UTC).Unix(), p.ID); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, p.ID)
+	}
+	list, err := s.Posts(ctx, uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []int64{ids[4], ids[3], ids[2], ids[0], ids[1]}
+	for i, p := range list {
+		if p.ID != want[i] {
+			t.Fatalf("position %d: got %d, want %d", i, p.ID, want[i])
+		}
 	}
 }

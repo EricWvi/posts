@@ -2,6 +2,7 @@ import type { PostStatus } from "@/lib/api";
 
 export const statusLabel: Record<PostStatus, string> = {
   uploading: "上传中",
+  ready: "待转换",
   queued: "排队中",
   converting: "转换中",
   done: "已完成",

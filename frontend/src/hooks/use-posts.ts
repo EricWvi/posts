@@ -49,3 +49,16 @@ export function useDelete() {
     },
   });
 }
+
+export function useStartConversion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.start,
+    onSuccess: (_, id) => {
+      // Keep the preview mounted until its success callback navigates away.
+      // Updating its status here would unmount the mutation observer first.
+      void qc.invalidateQueries({ queryKey: ["posts", id], refetchType: "none" });
+      return qc.invalidateQueries({ queryKey: ["posts"], exact: true });
+    },
+  });
+}

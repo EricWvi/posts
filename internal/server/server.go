@@ -60,6 +60,8 @@ func New(st *store.Store, lib *library.Library, authn *auth.Service, web fs.FS, 
 	private.HandleFunc("GET /api/posts/{id}", s.getPost)
 	private.HandleFunc("DELETE /api/posts/{id}", s.deletePost)
 	private.HandleFunc("POST /api/posts/{id}/retry", s.retryPost)
+	private.HandleFunc("POST /api/posts/{id}/convert", s.startPost)
+	private.HandleFunc("GET /api/posts/{id}/html", s.getOriginal)
 	private.HandleFunc("GET /api/posts/{id}/md", s.getMarkdown)
 	private.HandleFunc("GET /api/posts/{id}/zip", s.getZip)
 	private.HandleFunc("GET /api/posts/{id}/assets/{name}", s.getAsset)
@@ -191,6 +193,39 @@ func (s *server) deletePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.lib.Delete(r.Context(), userID(r), p.ID); err != nil {
+		writeStoreError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *server) getOriginal(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.post(w, r)
+	if !ok {
+		return
+	}
+	file, err := s.lib.OriginalFile(p)
+	if err != nil {
+		writeStoreError(w, r, err)
+		return
+	}
+	h := w.Header()
+	h.Set("Content-Type", "text/html; charset=utf-8")
+	h.Set("Cache-Control", "no-store")
+	h.Set("X-Content-Type-Options", "nosniff")
+	// The uploaded bytes stay intact, but never gain access to the app's
+	// origin, scripts, forms, or parent navigation, including on direct visits.
+	h.Set("Content-Security-Policy", "sandbox; default-src 'none'; style-src 'unsafe-inline' data:; img-src data: blob:; media-src data: blob:; font-src data:; frame-src data: blob:; base-uri 'none'; form-action 'none'")
+	h.Set("Referrer-Policy", "no-referrer")
+	serveFile(w, r, file)
+}
+
+func (s *server) startPost(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.post(w, r)
+	if !ok {
+		return
+	}
+	if err := s.lib.Start(r.Context(), userID(r), p.ID); err != nil {
 		writeStoreError(w, r, err)
 		return
 	}

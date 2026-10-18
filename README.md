@@ -3,10 +3,10 @@
 把浏览器 SingleFile 插件保存的网页整理成 Markdown 存档。
 
 1. 在页面上传 SingleFile 导出的 `.html`（可一次多个）。
-2. posts 删除 css 和 js，把内嵌的图片、视频封面等资源存成文件，html 里改为相对路径 `assets/<hash>.<ext>`。
-3. 后台按上传顺序逐篇调用 workflow 服务的 html2md API，由 `wf html2md`（converter profile，模型和推理强度在 workflow dashboard 配置）只保留正文转成 Markdown，并给出标题、发布日期和英文 slug。
+2. 上传后先全屏预览原始 HTML。可拖动悬浮按钮，点击打开菜单，选择“开始转换”或“返回列表”；未开始转换的网页保留在列表中。
+3. 点击“开始转换”后返回列表。后台清洗 HTML、提取内嵌资源，再逐篇调用 workflow 服务的 html2md API，由 `wf html2md`（converter profile，模型和推理强度在 workflow dashboard 配置）只保留正文转成 Markdown，并给出标题、发布日期和英文 slug。
 4. 程序校验 Markdown 里的每段文字都能在原网页中找到，找不到的段落作为警告显示在文章页。
-5. 文章存为 `<data>/<年>/<月>/<id>/<slug>.md`，只保留 Markdown 引用到的资源。可在线阅读、下载 zip、删除，失败后重试。
+5. 列表按发布日期降序（转换前暂用上传日期），后台转换与等待状态不受标签页刷新影响。文章存为 `<data>/<年>/<月>/<id>/<slug>.md`，只保留 Markdown 引用到的资源。可在线阅读、下载 zip、删除，失败后重试。
 
 业务规则和设计理由见 [docs/design.md](docs/design.md)。
 
@@ -28,7 +28,7 @@ config/            → /app/config
 ├─ config.yaml
 └─ posts.db        # 自动创建，位置由 database 决定（相对路径以 config.yaml 所在目录为准）
 reading-list/      → /app/data
-├─ .work/<id>/     # 待转换或转换失败的清洗后页面
+├─ .work/<id>/     # 上传的原始 HTML 及待转换或失败的清洗结果
 └─ 2026/10/12/plugin-extensions.md + assets/
 ```
 

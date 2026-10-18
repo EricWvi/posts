@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { FileUp, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ const isHtml = (f: File) => /\.html?$/i.test(f.name);
 /** Upload button plus a drop target covering the whole window. */
 export function UploadZone() {
   const qc = useQueryClient();
+  const [, navigate] = useLocation();
   const send = useUploads((s) => s.send);
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -23,8 +25,10 @@ export function UploadZone() {
     if (html.length === 0) return;
     const result = await send(html);
     if (result && result.posts.length > 0) {
-      toast.success(`已上传 ${result.posts.length} 篇，正在排队转换`);
+      toast.success(`已上传 ${result.posts.length} 篇`);
+      for (const post of result.posts) qc.setQueryData(["posts", post.id], post);
       await qc.invalidateQueries({ queryKey: ["posts"], exact: true });
+      navigate(`/posts/${result.posts[0]!.id}`);
     }
   };
 

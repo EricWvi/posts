@@ -111,6 +111,16 @@ func TestUploadConvertReadAndDelete(t *testing.T) {
 		t.Fatalf("upload result = %+v", res)
 	}
 	id := res.Posts[0].ID
+	if res.Posts[0].Status != store.StatusReady {
+		t.Fatalf("upload status = %s", res.Posts[0].Status)
+	}
+	raw := do(h, "GET", "/api/posts/"+itoa(id)+"/html", nil, "")
+	if raw.Code != 200 || raw.Body.String() != page || !strings.Contains(raw.Header().Get("Content-Security-Policy"), "sandbox;") {
+		t.Fatalf("original: %d %s", raw.Code, raw.Body)
+	}
+	if rec := do(h, "POST", "/api/posts/"+itoa(id)+"/convert", nil, ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("start: %d %s", rec.Code, rec.Body)
+	}
 	p := waitDone(t, h, id)
 	if p.Title != "Hello" || p.Path != "2025/03/"+itoa(id)+"/hello.md" {
 		t.Fatalf("post = %+v", p)
@@ -176,5 +186,33 @@ func TestAPIAndShell(t *testing.T) {
 	}
 	if rec := do(h, "GET", "/posts/12", nil, ""); rec.Code != 200 || !strings.Contains(rec.Body.String(), "app") {
 		t.Fatalf("shell: %d", rec.Code)
+	}
+}
+
+func TestOriginalAndConversionArePrivate(t *testing.T) {
+	h, st := newServer(t)
+	ctx := context.Background()
+	bob, err := st.UpsertUser(ctx, store.Identity{Issuer: "dev", Subject: "bob"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := st.CreatePost(ctx, bob.ID, store.NewPost{Title: "private"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.CompleteUpload(ctx, p.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, req := range []struct{ method, suffix string }{
+		{"GET", "/html"}, {"POST", "/convert"},
+	} {
+		rec := do(h, req.method, "/api/posts/"+itoa(p.ID)+req.suffix, nil, "")
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("%s: %d %s", req.suffix, rec.Code, rec.Body)
+		}
+	}
+	got, err := st.Post(ctx, bob.ID, p.ID)
+	if err != nil || got.Status != store.StatusReady {
+		t.Fatalf("private post modified: %+v, %v", got, err)
 	}
 }
