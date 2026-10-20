@@ -33,3 +33,23 @@ export function publishedDay(publishedDate: string): string {
 export function formatPublished(publishedDate: string): string {
   return publishedDate.replace("T", " ");
 }
+
+/** Toggle the current value; date-only values become midnight in the browser's timezone. */
+export function togglePublishedDate(value: string): string | null {
+  const date = value.trim();
+  const day = date.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const utc = new Date(`${day}T00:00:00Z`);
+  if (!Number.isFinite(utc.getTime()) || utc.toISOString().slice(0, 10) !== day) return null;
+
+  if (date !== day) {
+    if (!/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-]([01]\d|2[0-3]):[0-5]\d)$/.test(date)) return null;
+    return Number.isFinite(Date.parse(date)) ? day : null;
+  }
+
+  const local = new Date(`${day}T00:00:00`);
+  const offset = -local.getTimezoneOffset();
+  const pad = (part: number) => String(part).padStart(2, "0");
+  const zone = `${offset >= 0 ? "+" : "-"}${pad(Math.floor(Math.abs(offset) / 60))}:${pad(Math.abs(offset) % 60)}`;
+  return `${day}T00:00:00${zone}`;
+}

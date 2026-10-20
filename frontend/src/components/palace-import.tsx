@@ -5,6 +5,7 @@ import { useId, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { useImport } from "@/hooks/use-posts";
 import type { ArticleMetadata, Post } from "@/lib/api";
+import { togglePublishedDate } from "@/lib/format";
 
 const inputClass = "h-10 w-full rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -13,6 +14,8 @@ export function PalaceImport({ post }: { post: Post }) {
   const [open, setOpen] = useState(false);
   const [metadata, setMetadata] = useState<ArticleMetadata>({ title: "", url: "", date: "", author: "" });
   const fieldID = useId();
+  const toggledDate = togglePublishedDate(metadata.date);
+  const dateTarget = metadata.date.trim().length === 10 ? "RFC" : "Date";
   if (post.status !== "done") return null;
   if (post.palaceStatus === "done") {
     return <span className="shrink-0 text-xs text-muted-foreground">已导入 Palace</span>;
@@ -86,14 +89,30 @@ export function PalaceImport({ post }: { post: Post }) {
                 <label htmlFor={`${fieldID}-date`} className="text-sm font-medium">
                   发布日期
                 </label>
-                <input
-                  id={`${fieldID}-date`}
-                  className={inputClass}
-                  required
-                  placeholder="2026-10-20 或 2026-10-20T12:00:00+08:00"
-                  value={metadata.date}
-                  onChange={(e) => setMetadata({ ...metadata, date: e.target.value })}
-                />
+                <div className="relative">
+                  <input
+                    id={`${fieldID}-date`}
+                    className={`${inputClass} pr-16`}
+                    required
+                    placeholder="2026-10-20 或 2026-10-20T12:00:00+08:00"
+                    value={metadata.date}
+                    onChange={(e) => setMetadata({ ...metadata, date: e.target.value })}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1 h-8 px-2 text-xs text-muted-foreground"
+                    disabled={toggledDate === null}
+                    aria-label={`切换为 ${dateTarget === "RFC" ? "RFC 3339 时间" : "日期"}`}
+                    title={`切换为 ${dateTarget === "RFC" ? "RFC 3339 时间（本地零点）" : "日期"}`}
+                    onClick={() => {
+                      if (toggledDate !== null) setMetadata({ ...metadata, date: toggledDate });
+                    }}
+                  >
+                    {dateTarget}
+                  </Button>
+                </div>
               </div>
               <div className="space-y-1.5">
                 <label htmlFor={`${fieldID}-author`} className="text-sm font-medium">
