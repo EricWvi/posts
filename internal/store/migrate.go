@@ -62,6 +62,9 @@ var migrations = []migration{
 	// Who the page says wrote the article, set by the conversion; empty
 	// when the page names no one and for posts converted before this.
 	execSQL(`ALTER TABLE posts ADD COLUMN author TEXT NOT NULL DEFAULT ''`),
+	execSQL(`ALTER TABLE posts ADD COLUMN palace_status TEXT NOT NULL DEFAULT '';
+	ALTER TABLE posts ADD COLUMN palace_id TEXT NOT NULL DEFAULT '';
+	ALTER TABLE posts ADD COLUMN palace_error TEXT NOT NULL DEFAULT '';`),
 }
 
 func migrate(db *sql.DB) error {

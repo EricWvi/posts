@@ -4,6 +4,7 @@ import { Link, useLocation } from "wouter";
 import { ConfirmDelete } from "@/components/confirm-delete";
 import { MarkdownView } from "@/components/markdown-view";
 import { OriginalPreview } from "@/components/original-preview";
+import { PalaceImport } from "@/components/palace-import";
 import { RetryButton } from "@/components/retry-button";
 import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
@@ -19,67 +20,71 @@ export function PostPage({ id }: { id: number }) {
   if (error) return <Message>{error.message}</Message>;
   if (!post) return <Message>加载中…</Message>;
 
-  if (post.status === "ready") return <OriginalPreview post={post} />;
-
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant="ghost" asChild>
-          <Link href="/">
-            <ArrowLeft />
-            返回
-          </Link>
-        </Button>
-        <div className="flex-1" />
-        {post.status === "done" && (
-          <Button variant="outline" asChild>
-            <a href={zipUrl(post.id)} download>
-              <Download />
-              下载 zip
-            </a>
+    <OriginalPreview post={post}>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="ghost" asChild>
+            <Link href="/">
+              <ArrowLeft />
+              返回
+            </Link>
           </Button>
-        )}
-        {post.status === "failed" && <RetryButton id={post.id} />}
-        <ConfirmDelete post={post} onDeleted={() => navigate("/", { replace: true })} />
-      </div>
-
-      <header className="space-y-2 border-b pb-4">
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-          {post.author && <span>{post.author}</span>}
-          {post.publishedDate && <span>发布于 {formatPublished(post.publishedDate)}</span>}
-          {post.sourceUrl && (
-            <a href={post.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">
-              {hostOf(post.sourceUrl)}
-              <ExternalLink className="size-3.5" />
-            </a>
+          <div className="flex-1" />
+          <PalaceImport post={post} />
+          {post.status === "done" && (
+            <Button variant="outline" asChild>
+              <a href={zipUrl(post.id)} download>
+                <Download />
+                下载 zip
+              </a>
+            </Button>
           )}
-          <span>上传于 {formatDateTime(post.uploadedAt)}</span>
-        </p>
-        {post.path && <p className="break-all font-mono text-xs text-muted-foreground">{post.path}</p>}
-      </header>
-
-      {post.warning && <WarningPanel warning={post.warning} />}
-
-      {post.status === "done" ? (
-        md.data !== undefined ? (
-          <MarkdownView id={post.id} markdown={md.data} />
-        ) : md.error ? (
-          <Message>{md.error.message}</Message>
-        ) : (
-          <Message>加载中…</Message>
-        )
-      ) : (
-        <div className="space-y-3 rounded-xl border bg-card px-6 py-10 text-center">
-          <h1 className="text-lg font-medium">{post.title}</h1>
-          <StatusBadge status={post.status} />
-          {post.status === "failed" ? (
-            <p className="whitespace-pre-wrap break-words text-sm text-destructive">{post.error}</p>
-          ) : (
-            <p className="text-sm text-muted-foreground">转换通常需要一两分钟，完成后自动显示。</p>
-          )}
+          {post.status === "failed" && <RetryButton id={post.id} />}
+          <ConfirmDelete post={post} onDeleted={() => navigate("/", { replace: true })} />
         </div>
-      )}
-    </div>
+
+        <header className="space-y-2 border-b pb-4">
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+            {post.author && <span>{post.author}</span>}
+            {post.publishedDate && <span>发布于 {formatPublished(post.publishedDate)}</span>}
+            {post.sourceUrl && (
+              <a href={post.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">
+                {hostOf(post.sourceUrl)}
+                <ExternalLink className="size-3.5" />
+              </a>
+            )}
+            <span>上传于 {formatDateTime(post.uploadedAt)}</span>
+          </p>
+          {post.path && <p className="break-all font-mono text-xs text-muted-foreground">{post.path}</p>}
+        </header>
+
+        {post.warning && <WarningPanel warning={post.warning} />}
+        {post.palaceStatus === "failed" && (
+          <p className="whitespace-pre-wrap break-words text-sm text-destructive">{post.palaceError}</p>
+        )}
+
+        {post.status === "done" ? (
+          md.data !== undefined ? (
+            <MarkdownView id={post.id} markdown={md.data} />
+          ) : md.error ? (
+            <Message>{md.error.message}</Message>
+          ) : (
+            <Message>加载中…</Message>
+          )
+        ) : (
+          <div className="space-y-3 rounded-xl border bg-card px-6 py-10 text-center">
+            <h1 className="text-lg font-medium">{post.title}</h1>
+            <StatusBadge status={post.status} />
+            {post.status === "failed" ? (
+              <p className="whitespace-pre-wrap break-words text-sm text-destructive">{post.error}</p>
+            ) : (
+              <p className="text-sm text-muted-foreground">转换通常需要一两分钟，完成后自动显示。</p>
+            )}
+          </div>
+        )}
+      </div>
+    </OriginalPreview>
   );
 }
 

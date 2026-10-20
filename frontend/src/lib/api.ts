@@ -31,6 +31,10 @@ export type Post = {
   warning: ContentWarning | null;
   uploadedAt: string;
   convertedAt: string | null;
+  palaceStatus: "" | "queued" | "importing" | "done" | "failed";
+  palaceId: string;
+  palaceError: string;
+  originalAvailable: boolean;
 };
 
 export type User = {
@@ -79,6 +83,7 @@ export const api = {
   markdown: (id: number) => request<string>("GET", `/api/posts/${id}/md`, "text"),
   start: (id: number) => request<void>("POST", `/api/posts/${id}/convert`),
   retry: (id: number) => request<Post>("POST", `/api/posts/${id}/retry`),
+  import: (id: number) => request<void>("POST", `/api/posts/${id}/import`),
   remove: (id: number) => request<void>("DELETE", `/api/posts/${id}`),
 };
 

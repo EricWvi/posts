@@ -6,7 +6,8 @@
 2. 上传后先全屏预览原始 HTML。可拖动悬浮按钮，点击打开菜单，选择“开始转换”或“返回列表”；未开始转换的网页保留在列表中。
 3. 点击“开始转换”后返回列表。后台清洗 HTML、提取内嵌资源，再逐篇调用 workflow 服务的 html2md API，由 `wf html2md`（converter profile，模型和推理强度在 workflow dashboard 配置）只保留正文转成 Markdown，并给出标题、发布日期和英文 slug。
 4. 程序校验 Markdown 里的每段文字都能在原网页中找到，找不到的段落作为警告显示在文章页。
-5. 列表按发布日期降序（转换前暂用上传日期），后台转换与等待状态不受标签页刷新影响。文章存为 `<data>/<年>/<月>/<id>/<slug>.md`，只保留 Markdown 引用到的资源。可在线阅读、下载 zip、删除，失败后重试。
+5. 列表按发布日期降序（转换前暂用上传日期），后台转换与等待状态不受标签页刷新影响。文章存为 `<data>/<年>/<月>/<id>/<slug>.md`，只保留 Markdown 引用到的资源，原始 HTML 同时保存在该目录的 `original.html`。可拖动按钮的菜单可切换原文和转换结果；旧文章缺少原文时不可切换。
+6. 转换完成后，手动点击列表或文章页的“导入 Palace”才上传，不会自动导入。失败后可单独重试导入，不重新转换。文章可在线阅读、下载 zip、删除；删除本地文章保留 Palace 副本。
 
 业务规则和设计理由见 [docs/design.md](docs/design.md)。
 
@@ -52,7 +53,22 @@ CI 在两种原生架构上运行最终镜像中的 `pal --version` 与 `pal art
 
 `Dockerfile` 的 `PAL_VERSION` 默认 `latest`；发布 CI 总是传入已解析的固定版本，避免构建缓存保留旧 CLI，
 也避免两种架构在 latest 变化时安装不同版本。容器运行期间不自更新 pal。
-本文只安装工具；posts 自动生成 `article.json`、调用上传命令和保存导入状态仍需单独接入。
+用户手动导入时，posts 在文章目录生成 `article.json`，调用 `pal article upload` 并保存导入状态及远端文章 ID。
+导入在后台串行执行，最长 5 分钟；刷新页面不取消任务，服务重启恢复已请求且中断的导入。
+同一 Palace Owner 下相同原文 URL 返回已有文章，不覆盖远端内容；没有原文 URL 的文章无法导入。
+
+在 compose 的 `posts.environment` 中加入 `PAL_URL` 和 `PAL_TOKEN`（通过环境或 secrets 注入 token，不写入仓库）：
+
+```yaml
+environment:
+  PAL_URL: "https://palace.example.com"
+  PAL_TOKEN: "${PAL_TOKEN}"
+```
+
+`PAL_TOKEN` 在 Palace 的密钥管理中生成，所有导入均归属该 token 对应的 Owner。
+`PAL_URL` 必须为 HTTPS（回环地址可用 HTTP），与 CLI 配置规则一致；本地开发也通过这两个环境变量配置。
+未配置时仍可转换和阅读本地文章，手动导入会显示 CLI 的配置错误。部署实例应保持 Palace 目标与 Owner 固定。
+本机运行需要 PATH 中的 `pal` 支持 `article upload`；旧版本需先执行 `pal update`。
 
 compose 服务定义在 dotfiles 仓库的 `selfhost/only/docker-compose.yaml`（服务名 `posts`），`POSTS_OIDC_CLIENT_SECRET` 和其他 secrets 一样由 compose 环境变量提供。
 

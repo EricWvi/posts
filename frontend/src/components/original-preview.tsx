@@ -1,6 +1,6 @@
-import { ArrowLeft, Ellipsis, Loader, Play } from "lucide-react";
+import { ArrowLeft, Ellipsis, FileText, Loader, Play } from "lucide-react";
 import { Popover } from "radix-ui";
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
@@ -16,21 +16,28 @@ const clamp = (x: number, y: number) => ({
   y: Math.max(margin, Math.min(y, window.innerHeight - size - margin)),
 });
 
-export function OriginalPreview({ post }: { post: Post }) {
+export function OriginalPreview({ post, children }: { post: Post; children?: ReactNode }) {
   const [, navigate] = useLocation();
   const start = useStartConversion();
   const [open, setOpen] = useState(false);
+  const [original, setOriginal] = useState(post.status === "ready");
   const [dragging, setDragging] = useState(false);
   const [position, setPosition] = useState(() => clamp(window.innerWidth - size - 24, window.innerHeight - size - 24));
   const drag = useRef<{ x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
 
   useEffect(() => {
+    if (!original) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [original]);
+
+  useEffect(() => {
     const resize = () => setPosition((p) => clamp(p.x, p.y));
     window.addEventListener("resize", resize);
     return () => {
-      document.body.style.overflow = previous;
       window.removeEventListener("resize", resize);
     };
   }, []);
@@ -45,64 +52,103 @@ export function OriginalPreview({ post }: { post: Post }) {
     }
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-40 bg-background">
-      <iframe title={post.title} src={originalUrl(post.id)} sandbox="" referrerPolicy="no-referrer" className="h-full w-full border-0 bg-white" style={{ pointerEvents: dragging ? "none" : undefined }} />
-      <div className="fixed z-50" style={{ left: position.x, top: position.y }}>
-        <Popover.Root open={open} onOpenChange={setOpen}>
-          <Popover.Trigger asChild>
-            <button
-              type="button"
-              aria-label="网页菜单（可拖动）"
-              aria-haspopup="dialog"
-              aria-expanded={open}
-              className="flex size-[52px] touch-none select-none items-center justify-center rounded-full border bg-card text-card-foreground shadow-lg hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring active:cursor-grabbing"
-              onPointerDown={(e) => {
-                if (e.button !== 0) return;
-                setDragging(true);
-                drag.current = { x: e.clientX, y: e.clientY, left: position.x, top: position.y, moved: false };
-                e.currentTarget.setPointerCapture(e.pointerId);
-              }}
-              onPointerMove={move}
-              onPointerUp={() => setDragging(false)}
-              onPointerCancel={() => { setDragging(false); drag.current = null; }}
-              onClick={(e) => {
-                if (drag.current?.moved) e.preventDefault();
-                drag.current = null;
-              }}
-            >
-              <Ellipsis aria-hidden />
-            </button>
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Content
-              aria-label="网页操作"
-              side="top"
-              align="end"
-              sideOffset={10}
-              collisionPadding={margin}
-              className="z-50 w-44 rounded-xl border bg-popover p-1.5 text-popover-foreground shadow-lg"
-            >
-              <Button
-                variant="ghost"
-                className="w-full justify-start"
-                disabled={start.isPending}
-                onClick={() => start.mutate(post.id, {
-                  onSuccess: () => navigate("/"),
-                  onError: (err) => toast.error(err.message),
-                })}
-              >
-                {start.isPending ? <Loader className="animate-spin" /> : <Play />}
-                开始转换
-              </Button>
-              <Button variant="ghost" className="w-full justify-start" onClick={() => navigate("/")}>
-                <ArrowLeft />返回列表
-              </Button>
-            </Popover.Content>
-          </Popover.Portal>
-        </Popover.Root>
-      </div>
-    </div>,
-    document.body,
+  return (
+    <>
+      {!original && children}
+      {createPortal(
+        <>
+          {original && (
+            <div className="fixed inset-0 z-40 bg-background">
+              <iframe
+                title={post.title}
+                src={originalUrl(post.id)}
+                sandbox=""
+                referrerPolicy="no-referrer"
+                className="h-full w-full border-0 bg-white"
+                style={{ pointerEvents: dragging ? "none" : undefined }}
+              />
+            </div>
+          )}
+          <div className="fixed z-50" style={{ left: position.x, top: position.y }}>
+            <Popover.Root open={open} onOpenChange={setOpen}>
+              <Popover.Trigger asChild>
+                <button
+                  type="button"
+                  aria-label="网页菜单（可拖动）"
+                  aria-haspopup="dialog"
+                  aria-expanded={open}
+                  className="flex size-[52px] touch-none select-none items-center justify-center rounded-full border bg-card text-card-foreground shadow-lg hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring active:cursor-grabbing"
+                  onPointerDown={(e) => {
+                    if (e.button !== 0) return;
+                    setDragging(true);
+                    drag.current = { x: e.clientX, y: e.clientY, left: position.x, top: position.y, moved: false };
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                  }}
+                  onPointerMove={move}
+                  onPointerUp={() => setDragging(false)}
+                  onPointerCancel={() => {
+                    setDragging(false);
+                    drag.current = null;
+                  }}
+                  onClick={(e) => {
+                    if (drag.current?.moved) e.preventDefault();
+                    drag.current = null;
+                  }}
+                >
+                  <Ellipsis aria-hidden />
+                </button>
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Content
+                  aria-label="网页操作"
+                  side="top"
+                  align="end"
+                  sideOffset={10}
+                  collisionPadding={margin}
+                  className="z-50 w-44 rounded-xl border bg-popover p-1.5 text-popover-foreground shadow-lg"
+                >
+                  {post.status === "ready" && (
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start"
+                      disabled={start.isPending}
+                      onClick={() =>
+                        start.mutate(post.id, {
+                          onSuccess: () => navigate("/"),
+                          onError: (err) => toast.error(err.message),
+                        })
+                      }
+                    >
+                      {start.isPending ? <Loader className="animate-spin" /> : <Play />}
+                      开始转换
+                    </Button>
+                  )}
+                  {post.status !== "ready" && (
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-start"
+                      disabled={!original && !post.originalAvailable}
+                      title={!original && !post.originalAvailable ? "这篇文章未保留原始 HTML" : undefined}
+                      onClick={() => {
+                        setOriginal(!original);
+                        setOpen(false);
+                      }}
+                    >
+                      <FileText />
+                      {original ? (post.status === "done" ? "查看转换结果" : "查看处理状态") : "查看原文"}
+                    </Button>
+                  )}
+                  <Button variant="ghost" className="w-full justify-start" onClick={() => navigate("/")}>
+                    <ArrowLeft />
+                    返回列表
+                  </Button>
+                </Popover.Content>
+              </Popover.Portal>
+            </Popover.Root>
+          </div>
+        </>,
+        document.body,
+      )}
+    </>
   );
 }

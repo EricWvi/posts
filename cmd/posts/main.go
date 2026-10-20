@@ -20,6 +20,7 @@ import (
 	"posts/internal/config"
 	"posts/internal/convert"
 	"posts/internal/library"
+	"posts/internal/palace"
 	"posts/internal/server"
 	"posts/internal/store"
 )
@@ -60,7 +61,7 @@ func run(configPath string) error {
 	defer stop()
 
 	conv := convert.New(cfg.Workflow.URL, time.Duration(cfg.Workflow.Timeout))
-	lib, err := library.New(ctx, st, cfg.DataDir, conv)
+	lib, err := library.New(ctx, st, cfg.DataDir, conv, library.WithImporter(palace.New()))
 	if err != nil {
 		return err
 	}

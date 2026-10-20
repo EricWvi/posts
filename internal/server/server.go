@@ -61,6 +61,7 @@ func New(st *store.Store, lib *library.Library, authn *auth.Service, web fs.FS, 
 	private.HandleFunc("DELETE /api/posts/{id}", s.deletePost)
 	private.HandleFunc("POST /api/posts/{id}/retry", s.retryPost)
 	private.HandleFunc("POST /api/posts/{id}/convert", s.startPost)
+	private.HandleFunc("POST /api/posts/{id}/import", s.importPost)
 	private.HandleFunc("GET /api/posts/{id}/html", s.getOriginal)
 	private.HandleFunc("GET /api/posts/{id}/md", s.getMarkdown)
 	private.HandleFunc("GET /api/posts/{id}/zip", s.getZip)
@@ -89,6 +90,10 @@ func (s *server) listPosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
+	for i := range posts {
+		_, err := s.lib.OriginalFile(posts[i])
+		posts[i].OriginalAvailable = err == nil
+	}
 	writeJSON(w, http.StatusOK, posts)
 }
 
@@ -183,6 +188,8 @@ func (s *server) getPost(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	_, err := s.lib.OriginalFile(p)
+	p.OriginalAvailable = err == nil
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, p)
 }
@@ -246,6 +253,18 @@ func (s *server) retryPost(w http.ResponseWriter, r *http.Request) {
 	} else {
 		writeStoreError(w, r, err)
 	}
+}
+
+func (s *server) importPost(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.post(w, r)
+	if !ok {
+		return
+	}
+	if err := s.lib.Import(r.Context(), userID(r), p.ID); err != nil {
+		writeStoreError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *server) getMarkdown(w http.ResponseWriter, r *http.Request) {

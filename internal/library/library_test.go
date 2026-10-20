@@ -182,6 +182,14 @@ func TestConversionPlacesPostByPublishedDate(t *testing.T) {
 	if _, err := os.Stat(e.lib.workDir(p.ID)); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("work dir kept after success")
 	}
+	originalPath, err := e.lib.OriginalFile(done)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := os.ReadFile(originalPath)
+	if err != nil || !bytes.Equal(original, page) {
+		t.Fatalf("original not preserved: %v", err)
+	}
 	if f, err := e.lib.AssetFile(done, photoName); err != nil || !exists(f) {
 		t.Fatalf("asset file %q, %v", f, err)
 	}
@@ -238,11 +246,18 @@ func TestDeleteRemovesFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	done := e.wait(t, p.ID, store.StatusDone)
+	originalPath, err := e.lib.OriginalFile(done)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := e.lib.Delete(context.Background(), e.user, p.ID); err != nil {
 		t.Fatal(err)
 	}
 	if exists(e.lib.postDir(done)) {
 		t.Fatal("post dir kept")
+	}
+	if exists(originalPath) {
+		t.Fatal("original kept after deletion")
 	}
 	if _, err := e.st.Post(context.Background(), e.user, p.ID); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("post kept: %v", err)

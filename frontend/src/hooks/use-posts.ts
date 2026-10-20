@@ -6,11 +6,13 @@ import { isPending } from "@/lib/format";
 // Conversions take a minute or more; polling every few seconds is plenty.
 const pollMs = 3000;
 
+const pending = (p: Post) => isPending(p.status) || p.palaceStatus === "queued" || p.palaceStatus === "importing";
+
 export function usePosts() {
   return useQuery({
     queryKey: ["posts"],
     queryFn: api.posts,
-    refetchInterval: (q) => (q.state.data?.some((p) => isPending(p.status)) ? pollMs : false),
+    refetchInterval: (q) => (q.state.data?.some(pending) ? pollMs : false),
   });
 }
 
@@ -18,7 +20,7 @@ export function usePost(id: number) {
   return useQuery({
     queryKey: ["posts", id],
     queryFn: () => api.post(id),
-    refetchInterval: (q) => (q.state.data && isPending(q.state.data.status) ? pollMs : false),
+    refetchInterval: (q) => (q.state.data && pending(q.state.data) ? pollMs : false),
   });
 }
 
@@ -35,6 +37,14 @@ export function useRetry() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: api.retry,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["posts"] }),
+  });
+}
+
+export function useImport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.import,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["posts"] }),
   });
 }

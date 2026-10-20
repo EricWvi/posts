@@ -2,6 +2,7 @@ import { FileText, TriangleAlert } from "lucide-react";
 import { Link } from "wouter";
 
 import { ConfirmDelete } from "@/components/confirm-delete";
+import { PalaceImport } from "@/components/palace-import";
 import { RetryButton } from "@/components/retry-button";
 import { StatusBadge } from "@/components/status-badge";
 import { UploadStatus } from "@/components/upload-zone";
@@ -66,9 +67,11 @@ function PostRow({ post }: { post: Post }) {
         </div>
         <p className="mt-0.5 truncate text-xs text-muted-foreground">{meta.join(" · ")}</p>
         {post.status === "failed" && <p className="mt-1 line-clamp-2 break-words text-xs text-destructive">{post.error}</p>}
+        {post.palaceStatus === "failed" && <p className="mt-1 line-clamp-2 break-words text-xs text-destructive">{post.palaceError}</p>}
       </div>
       {post.status !== "done" && <StatusBadge status={post.status} />}
       {post.status === "failed" && <RetryButton id={post.id} iconOnly />}
+      <PalaceImport post={post} />
       <ConfirmDelete post={post} iconOnly />
     </li>
   );

@@ -20,7 +20,7 @@ import { isPending } from "@/lib/format";
 /** Delete button with a confirmation dialog. */
 export function ConfirmDelete({ post, onDeleted, iconOnly }: { post: Post; onDeleted?: () => void; iconOnly?: boolean }) {
   const remove = useDelete();
-  const busy = isPending(post.status);
+  const busy = isPending(post.status) || post.palaceStatus === "queued" || post.palaceStatus === "importing";
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
@@ -28,7 +28,7 @@ export function ConfirmDelete({ post, onDeleted, iconOnly }: { post: Post; onDel
           variant="ghost"
           size={iconOnly ? "icon" : "default"}
           disabled={busy || remove.isPending}
-          title={busy ? "转换完成或失败后才能删除" : "删除"}
+          title={busy ? "处理完成或失败后才能删除" : "删除"}
           aria-label="删除"
         >
           <Trash2 />
@@ -38,7 +38,7 @@ export function ConfirmDelete({ post, onDeleted, iconOnly }: { post: Post; onDel
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>删除这篇文章？</AlertDialogTitle>
-          <AlertDialogDescription>「{post.title}」的网页、Markdown 和图片等资源会一并删除，无法恢复。</AlertDialogDescription>
+          <AlertDialogDescription>「{post.title}」的本地网页、Markdown 和图片等资源会一并删除，无法恢复。已导入 Palace 的文章保留。</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>取消</AlertDialogCancel>

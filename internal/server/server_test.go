@@ -32,7 +32,7 @@ const photo = "55c64d0fcd6f9d5f.png" // sha256("photo")
 var page = `<html><head><title>Hello | Blog</title></head><body><h1>Hello</h1><p>Real text.</p>
 <img src="data:image/png;base64,` + base64.StdEncoding.EncodeToString([]byte("photo")) + `"></body></html>`
 
-func newServer(t *testing.T) (http.Handler, *store.Store) {
+func newServer(t *testing.T, options ...library.Option) (http.Handler, *store.Store) {
 	t.Helper()
 	root := t.TempDir()
 	st, err := store.Open(filepath.Join(root, "posts.db"))
@@ -42,7 +42,7 @@ func newServer(t *testing.T) (http.Handler, *store.Store) {
 	t.Cleanup(func() { st.Close() })
 	conv := fakeConverter{convert.Article{Title: "Hello", PublishedDate: "2025-03-04", Slug: "hello",
 		Markdown: "# Hello\n\nReal text.\n\n![](assets/" + photo + ")\n"}}
-	lib, err := library.New(context.Background(), st, filepath.Join(root, "data"), conv)
+	lib, err := library.New(context.Background(), st, filepath.Join(root, "data"), conv, options...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,8 +122,12 @@ func TestUploadConvertReadAndDelete(t *testing.T) {
 		t.Fatalf("start: %d %s", rec.Code, rec.Body)
 	}
 	p := waitDone(t, h, id)
-	if p.Title != "Hello" || p.Path != "2025/03/"+itoa(id)+"/hello.md" {
+	if p.Title != "Hello" || p.Path != "2025/03/"+itoa(id)+"/hello.md" || !p.OriginalAvailable {
 		t.Fatalf("post = %+v", p)
+	}
+	raw = do(h, "GET", "/api/posts/"+itoa(id)+"/html", nil, "")
+	if raw.Code != 200 || raw.Body.String() != page || !strings.Contains(raw.Header().Get("Content-Security-Policy"), "sandbox;") {
+		t.Fatalf("converted original: %d %s", raw.Code, raw.Body)
 	}
 
 	var list []store.Post
@@ -157,6 +161,51 @@ func TestUploadConvertReadAndDelete(t *testing.T) {
 	if rec := do(h, "GET", "/api/posts/"+itoa(id), nil, ""); rec.Code != http.StatusNotFound {
 		t.Fatalf("get deleted: %d", rec.Code)
 	}
+}
+
+type fakeImporter struct{}
+
+func (fakeImporter) Upload(context.Context, string) (string, error) {
+	return "0199f0a0-0000-7000-8000-000000000000", nil
+}
+
+func TestManualPalaceImport(t *testing.T) {
+	h, _ := newServer(t, library.WithImporter(fakeImporter{}))
+	source := "<!-- Page saved with SingleFile\n url: https://blog.test/hello\n -->" + page
+	res := upload(t, h, map[string]string{"hello.html": source})
+	id := res.Posts[0].ID
+	path := "/api/posts/" + itoa(id)
+	if rec := do(h, "POST", path+"/import", nil, ""); rec.Code != 409 {
+		t.Fatalf("import before conversion: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", path+"/convert", nil, ""); rec.Code != 204 {
+		t.Fatalf("start: %d", rec.Code)
+	}
+	p := waitDone(t, h, id)
+	if p.PalaceStatus != "" || p.PalaceID != "" {
+		t.Fatalf("automatically imported: %+v", p)
+	}
+	if rec := do(h, "POST", path+"/import", nil, ""); rec.Code != 204 {
+		t.Fatalf("import: %d %s", rec.Code, rec.Body)
+	}
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		if err := json.Unmarshal(do(h, "GET", path, nil, "").Body.Bytes(), &p); err != nil {
+			t.Fatal(err)
+		}
+		if p.PalaceStatus == "done" {
+			if p.PalaceID == "" || p.Status != store.StatusDone {
+				t.Fatalf("post = %+v", p)
+			}
+			if rec := do(h, "POST", path+"/import", nil, ""); rec.Code != 409 {
+				t.Fatalf("duplicate import: %d", rec.Code)
+			}
+			if rec := do(h, "GET", path+"/md", nil, ""); rec.Code != 200 {
+				t.Fatalf("md after import: %d", rec.Code)
+			}
+			return
+		}
+	}
+	t.Fatalf("import did not complete: %+v", p)
 }
 
 func TestUploadRejectsOversizedFiles(t *testing.T) {
@@ -204,7 +253,7 @@ func TestOriginalAndConversionArePrivate(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, req := range []struct{ method, suffix string }{
-		{"GET", "/html"}, {"POST", "/convert"},
+		{"GET", "/html"}, {"POST", "/convert"}, {"POST", "/import"},
 	} {
 		rec := do(h, req.method, "/api/posts/"+itoa(p.ID)+req.suffix, nil, "")
 		if rec.Code != http.StatusNotFound {

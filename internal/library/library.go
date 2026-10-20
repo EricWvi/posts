@@ -2,11 +2,13 @@
 //
 // Layout under the data directory:
 //
-//	.work/<id>/original.html      original upload, kept until conversion succeeds
+//	.work/<id>/original.html      original upload awaiting conversion
 //	.work/<id>/index.html         cleaned page waiting for (or failed) conversion
 //	.work/<id>/assets/<name>      media extracted from the page
 //	<year>/<month>/<id>/<slug>.md converted post
 //	<year>/<month>/<id>/assets/   the media the Markdown references
+//	<year>/<month>/<id>/original.html original upload preserved after conversion
+//	<year>/<month>/<id>/article.json  metadata written on a manual Palace import
 //
 // Year and month come from the post's publication date, so a post only gets
 // its final place once converted. The work directory is removed after a
@@ -41,16 +43,31 @@ type Converter interface {
 // Library is safe for concurrent use. Run must be running for queued posts
 // to be converted.
 type Library struct {
-	store *store.Store
-	dir   string
-	conv  Converter
-	wake  chan struct{}
+	store    *store.Store
+	dir      string
+	conv     Converter
+	wake     chan struct{}
+	importer Importer
+}
+
+// Importer uploads an article directory and returns its Palace article ID.
+type Importer interface {
+	Upload(context.Context, string) (string, error)
+}
+
+type Option func(*Library)
+
+func WithImporter(importer Importer) Option {
+	return func(l *Library) { l.importer = importer }
 }
 
 // New prepares the data directory, removes uploads a restart cut off and
 // requeues conversions it interrupted.
-func New(ctx context.Context, st *store.Store, dir string, conv Converter) (*Library, error) {
+func New(ctx context.Context, st *store.Store, dir string, conv Converter, options ...Option) (*Library, error) {
 	l := &Library{store: st, dir: dir, conv: conv, wake: make(chan struct{}, 1)}
+	for _, option := range options {
+		option(l)
+	}
 	if err := os.MkdirAll(l.workRoot(), 0o755); err != nil {
 		return nil, fmt.Errorf("create data dir: %w", err)
 	}
@@ -72,6 +89,9 @@ func New(ctx context.Context, st *store.Store, dir string, conv Converter) (*Lib
 	}
 	if n > 0 {
 		slog.Info("requeued interrupted conversions", "count", n)
+	}
+	if err := st.RequeueImports(ctx); err != nil {
+		return nil, err
 	}
 	return l, nil
 }
@@ -105,6 +125,7 @@ func (l *Library) Upload(ctx context.Context, userID int64, src []byte, fallback
 		return store.Post{}, err
 	}
 	p.Status = store.StatusReady
+	p.OriginalAvailable = true
 	return p, nil
 }
 
@@ -127,12 +148,21 @@ func (l *Library) Start(ctx context.Context, userID, id int64) error {
 	return nil
 }
 
-// OriginalFile returns the original upload while it is awaiting conversion.
+// OriginalFile returns the original upload before or after conversion.
 func (l *Library) OriginalFile(p store.Post) (string, error) {
-	if p.Status == store.StatusDone || p.Status == store.StatusUploading {
+	if p.Status == store.StatusUploading {
 		return "", store.ErrNotFound
 	}
-	return filepath.Join(l.workDir(p.ID), "original.html"), nil
+	file := filepath.Join(l.workDir(p.ID), "original.html")
+	if p.Status == store.StatusDone {
+		file = filepath.Join(l.postDir(p), "original.html")
+	}
+	if _, err := os.Stat(file); errors.Is(err, os.ErrNotExist) {
+		return "", store.ErrNotFound
+	} else if err != nil {
+		return "", err
+	}
+	return file, nil
 }
 
 func (l *Library) writeWork(id int64, page singlefile.Page) error {
@@ -254,6 +284,25 @@ func (l *Library) WriteZip(w io.Writer, p store.Post) error {
 // Run converts queued posts one at a time until ctx is done.
 func (l *Library) Run(ctx context.Context) {
 	for {
+		if l.importer != nil {
+			p, err := l.store.ClaimImport(ctx)
+			if err == nil {
+				l.importPost(ctx, p)
+				continue
+			}
+			if ctx.Err() != nil {
+				return
+			}
+			if !errors.Is(err, store.ErrNotFound) {
+				slog.Error("claim Palace import", "err", err)
+				select {
+				case <-time.After(5 * time.Second):
+				case <-ctx.Done():
+					return
+				}
+				continue
+			}
+		}
 		p, err := l.store.ClaimNext(ctx)
 		switch {
 		case ctx.Err() != nil:
@@ -347,6 +396,15 @@ func (l *Library) convert(ctx context.Context, p store.Post) (store.Converted, e
 	if err := l.place(work, dir, article); err != nil {
 		os.RemoveAll(dir)
 		return store.Converted{}, fmt.Errorf("保存转换结果: %w", err)
+	}
+	if _, err := os.Stat(filepath.Join(work, "original.html")); err == nil {
+		if err := copyFile(filepath.Join(work, "original.html"), filepath.Join(dir, "original.html")); err != nil {
+			os.RemoveAll(dir)
+			return store.Converted{}, fmt.Errorf("保留原始页面: %w", err)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		os.RemoveAll(dir)
+		return store.Converted{}, err
 	}
 	return store.Converted{
 		Title:         article.Title,

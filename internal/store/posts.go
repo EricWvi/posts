@@ -51,6 +51,12 @@ type Post struct {
 	Warning     json.RawMessage `json:"warning"`
 	UploadedAt  time.Time       `json:"uploadedAt"`
 	ConvertedAt *time.Time      `json:"convertedAt"`
+	// Palace import is independent of conversion. Empty means never requested.
+	PalaceStatus string `json:"palaceStatus"`
+	PalaceID     string `json:"palaceId"`
+	PalaceError  string `json:"palaceError"`
+	// Computed from the filesystem by the API; old archives may lack original HTML.
+	OriginalAvailable bool `json:"originalAvailable"`
 }
 
 // NewPost describes an upload.
@@ -71,7 +77,7 @@ type Converted struct {
 }
 
 const postColumns = `id, user_id, status, title, source_url, saved_at, published_date, author, slug, path,
-	error, warning, uploaded_at, converted_at`
+	error, warning, uploaded_at, converted_at, palace_status, palace_id, palace_error`
 
 func scanPost(row interface{ Scan(...any) error }) (Post, error) {
 	var p Post
@@ -79,7 +85,8 @@ func scanPost(row interface{ Scan(...any) error }) (Post, error) {
 	var uploadedAt int64
 	var warning string
 	err := row.Scan(&p.ID, &p.UserID, &p.Status, &p.Title, &p.SourceURL, &savedAt, &p.PublishedDate,
-		&p.Author, &p.Slug, &p.Path, &p.Error, &warning, &uploadedAt, &convertedAt)
+		&p.Author, &p.Slug, &p.Path, &p.Error, &warning, &uploadedAt, &convertedAt,
+		&p.PalaceStatus, &p.PalaceID, &p.PalaceError)
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, ErrNotFound
 	}
@@ -222,7 +229,7 @@ func (s *Store) DeletePost(ctx context.Context, userID, id int64) (Post, error) 
 		if err != nil {
 			return err
 		}
-		if p.Status == StatusConverting || p.Status == StatusUploading {
+		if p.Status == StatusConverting || p.Status == StatusUploading || p.PalaceStatus == "importing" {
 			return conflict("文章正在处理，请稍后再删除")
 		}
 		_, err = tx.ExecContext(ctx, `DELETE FROM posts WHERE id = ?`, id)
