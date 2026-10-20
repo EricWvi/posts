@@ -36,9 +36,12 @@ type Post struct {
 	Title     string     `json:"title"`
 	SourceURL string     `json:"sourceUrl"`
 	SavedAt   *time.Time `json:"savedAt"`
-	// PublishedDate (YYYY-MM-DD), Slug and Path are set by the conversion.
-	// Path is the Markdown file relative to the data directory.
+	// PublishedDate, Author, Slug and Path are set by the conversion.
+	// PublishedDate is YYYY-MM-DD, or an RFC 3339 time with its offset when
+	// the page gives one; Author is empty when the page names no one. Path
+	// is the Markdown file relative to the data directory.
 	PublishedDate string `json:"publishedDate"`
+	Author        string `json:"author"`
 	Slug          string `json:"slug"`
 	Path          string `json:"path"`
 	// Error says why the last conversion failed.
@@ -61,12 +64,13 @@ type NewPost struct {
 type Converted struct {
 	Title         string
 	PublishedDate string
+	Author        string
 	Slug          string
 	Path          string
 	Warning       json.RawMessage // nil when the content check passed
 }
 
-const postColumns = `id, user_id, status, title, source_url, saved_at, published_date, slug, path,
+const postColumns = `id, user_id, status, title, source_url, saved_at, published_date, author, slug, path,
 	error, warning, uploaded_at, converted_at`
 
 func scanPost(row interface{ Scan(...any) error }) (Post, error) {
@@ -75,7 +79,7 @@ func scanPost(row interface{ Scan(...any) error }) (Post, error) {
 	var uploadedAt int64
 	var warning string
 	err := row.Scan(&p.ID, &p.UserID, &p.Status, &p.Title, &p.SourceURL, &savedAt, &p.PublishedDate,
-		&p.Slug, &p.Path, &p.Error, &warning, &uploadedAt, &convertedAt)
+		&p.Author, &p.Slug, &p.Path, &p.Error, &warning, &uploadedAt, &convertedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, ErrNotFound
 	}
@@ -161,8 +165,8 @@ func (s *Store) ClaimNext(ctx context.Context) (Post, error) {
 // Finish records a successful conversion.
 func (s *Store) Finish(ctx context.Context, id int64, c Converted) error {
 	return s.transition(ctx, id, StatusConverting, StatusDone,
-		`status = ?, title = ?, published_date = ?, slug = ?, path = ?, warning = ?, error = '', converted_at = ?`,
-		StatusDone, c.Title, c.PublishedDate, c.Slug, c.Path, string(c.Warning), time.Now().Unix())
+		`status = ?, title = ?, published_date = ?, author = ?, slug = ?, path = ?, warning = ?, error = '', converted_at = ?`,
+		StatusDone, c.Title, c.PublishedDate, c.Author, c.Slug, c.Path, string(c.Warning), time.Now().Unix())
 }
 
 // Fail records why a conversion failed.
@@ -199,7 +203,7 @@ func (s *Store) transition(ctx context.Context, id int64, from, to Status, set s
 
 // Posts lists posts by publication date, falling back to upload date until known.
 func (s *Store) Posts(ctx context.Context, userID int64) ([]Post, error) {
-	return s.posts(ctx, `WHERE user_id = ? ORDER BY COALESCE(NULLIF(published_date, ''), date(uploaded_at, 'unixepoch')) DESC, id DESC`, userID)
+	return s.posts(ctx, `WHERE user_id = ? ORDER BY COALESCE(NULLIF(substr(published_date, 1, 10), ''), date(uploaded_at, 'unixepoch')) DESC, id DESC`, userID)
 }
 
 // Post returns one of the user's posts.

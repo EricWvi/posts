@@ -108,7 +108,7 @@ var page = []byte(`<!DOCTYPE html><html><!--
 </body></html>`)
 
 var article = convert.Article{
-	Title: "Hello", PublishedDate: "2025-03-04", Slug: "hello",
+	Title: "Hello", PublishedDate: "2025-03-04T08:30:00+08:00", Author: "Ada", Slug: "hello",
 	Markdown: "# Hello\n\nReal text.\n\n![Photo](assets/" + photoName + ")\n",
 }
 
@@ -167,7 +167,8 @@ func TestConversionPlacesPostByPublishedDate(t *testing.T) {
 	done := e.wait(t, p.ID, store.StatusDone)
 
 	rel := "2025/03/" + itoa(p.ID)
-	if done.Path != rel+"/hello.md" || done.Title != "Hello" || done.PublishedDate != "2025-03-04" || done.Warning != nil {
+	if done.Path != rel+"/hello.md" || done.Title != "Hello" || done.PublishedDate != article.PublishedDate ||
+		done.Author != "Ada" || done.Warning != nil {
 		t.Fatalf("post = %+v", done)
 	}
 	md, err := os.ReadFile(filepath.Join(e.dir, rel, "hello.md"))

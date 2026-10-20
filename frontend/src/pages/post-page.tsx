@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { useMarkdown, usePost } from "@/hooks/use-posts";
 import { zipUrl, type ContentWarning } from "@/lib/api";
-import { formatDateTime, hostOf } from "@/lib/format";
+import { formatDateTime, formatPublished, hostOf } from "@/lib/format";
 
 export function PostPage({ id }: { id: number }) {
   const [, navigate] = useLocation();
@@ -45,7 +45,8 @@ export function PostPage({ id }: { id: number }) {
 
       <header className="space-y-2 border-b pb-4">
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-          {post.publishedDate && <span>发布于 {post.publishedDate}</span>}
+          {post.author && <span>{post.author}</span>}
+          {post.publishedDate && <span>发布于 {formatPublished(post.publishedDate)}</span>}
           {post.sourceUrl && (
             <a href={post.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">
               {hostOf(post.sourceUrl)}

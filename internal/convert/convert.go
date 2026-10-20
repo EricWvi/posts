@@ -17,9 +17,14 @@ import (
 // Article is what the conversion makes of a page.
 type Article struct {
 	Title string `json:"title"`
-	// PublishedDate is YYYY-MM-DD: the date the page gives, or the day of
-	// the conversion when it gives none.
+	// PublishedDate is the date the page gives, or the day of the
+	// conversion when it gives none: YYYY-MM-DD, or an RFC 3339 time with
+	// its offset when the page gives an exact time. Either way it starts
+	// with the YYYY-MM-DD the page shows.
 	PublishedDate string `json:"published_date"`
+	// Author is who the page says wrote the article; empty when it names
+	// no one (the service answers null).
+	Author string `json:"author"`
 	// Slug is lowercase ASCII letters, digits and single dashes.
 	Slug     string `json:"slug"`
 	Markdown string `json:"markdown"`
@@ -35,7 +40,7 @@ func (a Article) validate() error {
 	if strings.TrimSpace(a.Title) == "" {
 		return errors.New("转换结果缺少标题")
 	}
-	if t, err := time.Parse(time.DateOnly, a.PublishedDate); err != nil || t.Format(time.DateOnly) != a.PublishedDate {
+	if !validPublished(a.PublishedDate) {
 		return fmt.Errorf("转换结果的发布日期无效: %q", a.PublishedDate)
 	}
 	if !slugPattern.MatchString(a.Slug) || len(a.Slug) > maxSlug {
@@ -45,6 +50,24 @@ func (a Article) validate() error {
 		return errors.New("转换结果的 Markdown 为空")
 	}
 	return nil
+}
+
+// validPublished accepts a day, or an exact time with its offset. The day
+// part must be a real date, since it names the archive directory.
+func validPublished(s string) bool {
+	if len(s) < len(time.DateOnly) {
+		return false
+	}
+	day, err := time.Parse(time.DateOnly, s[:len(time.DateOnly)])
+	if err != nil || day.Format(time.DateOnly) != s[:len(time.DateOnly)] {
+		return false
+	}
+	if len(s) == len(time.DateOnly) {
+		return true
+	}
+	// time.RFC3339 requires the offset, so a time without one is refused.
+	_, err = time.Parse(time.RFC3339, s)
+	return err == nil
 }
 
 // Client calls POST /api/v1/workflows/html2md on the workflow service.
@@ -99,5 +122,6 @@ func (c *Client) Convert(ctx context.Context, html []byte) (Article, error) {
 		return Article{}, fmt.Errorf("workflow 响应不是合法 JSON: %w", err)
 	}
 	a.Title = strings.TrimSpace(a.Title)
+	a.Author = strings.TrimSpace(a.Author)
 	return a, a.validate()
 }

@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { UploadStatus } from "@/components/upload-zone";
 import { usePosts } from "@/hooks/use-posts";
 import type { Post } from "@/lib/api";
-import { formatDateTime, hostOf } from "@/lib/format";
+import { formatDateTime, hostOf, publishedDay } from "@/lib/format";
 
 export function PostList() {
   const { data: posts, error, isPending } = usePosts();
@@ -45,8 +45,9 @@ function Empty() {
 
 function PostRow({ post }: { post: Post }) {
   const meta = [
+    post.author,
     post.sourceUrl && hostOf(post.sourceUrl),
-    post.publishedDate ? `发布于 ${post.publishedDate}` : `上传于 ${formatDateTime(post.uploadedAt)}`,
+    post.publishedDate ? `发布于 ${publishedDay(post.publishedDate)}` : `上传于 ${formatDateTime(post.uploadedAt)}`,
   ].filter(Boolean);
   return (
     <li className="flex items-center gap-3 px-4 py-3">

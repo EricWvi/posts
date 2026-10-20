@@ -351,6 +351,7 @@ func (l *Library) convert(ctx context.Context, p store.Post) (store.Converted, e
 	return store.Converted{
 		Title:         article.Title,
 		PublishedDate: article.PublishedDate,
+		Author:        article.Author,
 		Slug:          article.Slug,
 		Path:          rel + "/" + article.Slug + ".md",
 		Warning:       warning,

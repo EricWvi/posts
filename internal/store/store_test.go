@@ -112,12 +112,12 @@ func TestPostLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	warning := json.RawMessage(`{"unmatched":["x"]}`)
-	if err := s.Finish(ctx, p.ID, Converted{Title: "Page", PublishedDate: "2026-10-01", Slug: "page",
-		Path: "2026/10/1/page.md", Warning: warning}); err != nil {
+	if err := s.Finish(ctx, p.ID, Converted{Title: "Page", PublishedDate: "2026-10-01", Author: "Ada",
+		Slug: "page", Path: "2026/10/1/page.md", Warning: warning}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := s.Post(ctx, uid, p.ID)
-	if got.Status != StatusDone || got.Title != "Page" || got.Slug != "page" || got.Path != "2026/10/1/page.md" ||
+	if got.Status != StatusDone || got.Title != "Page" || got.Author != "Ada" || got.Slug != "page" || got.Path != "2026/10/1/page.md" ||
 		got.Error != "" || string(got.Warning) != string(warning) || got.ConvertedAt == nil {
 		t.Fatalf("done = %+v", got)
 	}
@@ -242,7 +242,8 @@ func TestPostsSortByPublicationDateWithUploadFallback(t *testing.T) {
 	ctx := context.Background()
 	uid := newUser(t, s, "alice")
 	var ids []int64
-	for _, date := range []string{"2025-08-20", "2025-01-01", "2025-08-20", "", ""} {
+	// An exact time sorts by its day, so it ties with a bare date of that day and the id decides.
+	for _, date := range []string{"2025-08-20T23:30:00+08:00", "2025-01-01", "2025-08-20", "", ""} {
 		p, err := s.CreatePost(ctx, uid, NewPost{Title: date})
 		if err != nil {
 			t.Fatal(err)

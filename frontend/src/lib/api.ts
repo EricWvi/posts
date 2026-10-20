@@ -16,8 +16,13 @@ export type Post = {
   title: string;
   sourceUrl: string;
   savedAt: string | null;
-  /** YYYY-MM-DD, set by the conversion. */
+  /**
+   * Set by the conversion: YYYY-MM-DD, or an RFC 3339 time with the page's
+   * offset when the page gives an exact time.
+   */
   publishedDate: string;
+  /** Who the page says wrote the article; empty when it names no one. */
+  author: string;
   slug: string;
   /** Markdown file relative to the data directory. */
   path: string;

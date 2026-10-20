@@ -59,6 +59,9 @@ var migrations = []migration{
 	CREATE INDEX posts_user ON posts (user_id, id);
 	CREATE INDEX posts_status ON posts (status, id);
 	`),
+	// Who the page says wrote the article, set by the conversion; empty
+	// when the page names no one and for posts converted before this.
+	execSQL(`ALTER TABLE posts ADD COLUMN author TEXT NOT NULL DEFAULT ''`),
 }
 
 func migrate(db *sql.DB) error {

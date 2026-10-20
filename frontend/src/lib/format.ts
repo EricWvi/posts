@@ -23,3 +23,13 @@ export function hostOf(url: string): string {
     return url;
   }
 }
+
+/** The day a post was published, as the page shows it, whether or not it also gave a time. */
+export function publishedDay(publishedDate: string): string {
+  return publishedDate.slice(0, 10);
+}
+
+/** A publish date as the page gave it: the day, plus the time and its offset when given. */
+export function formatPublished(publishedDate: string): string {
+  return publishedDate.replace("T", " ");
+}
