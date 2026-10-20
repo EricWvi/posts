@@ -8,6 +8,13 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run typecheck && npm run build
 
+# Resolve and verify the static CLI on the build host, including for ARM64 targets.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS pal
+ARG TARGETARCH
+ARG PAL_VERSION=latest
+COPY scripts/install-pal.mjs /install-pal.mjs
+RUN node /install-pal.mjs "$TARGETARCH" /out "$PAL_VERSION"
+
 FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 ARG TARGETOS
 ARG TARGETARCH
@@ -29,6 +36,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
 FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /app
 COPY --from=build /out/posts /app/posts
+COPY --from=pal /out/pal /usr/local/bin/pal
 # config/ holds config.yaml and posts.db; data/ holds the converted posts.
 COPY --from=build --chown=nonroot:nonroot /out/config /app/config
 COPY --from=build --chown=nonroot:nonroot /out/data /app/data

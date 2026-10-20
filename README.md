@@ -44,6 +44,16 @@ reading-list/      → /app/data
 
 镜像由 GitHub Actions 在打 `v*` tag 时构建并推送到 GHCR（[release.yml](.github/workflows/release.yml)），不在本地构建。
 
+最终镜像仍为 `distroless/static-debian12:nonroot`，内置 `/usr/local/bin/pal`。
+CI 在构建前解析 Palace 最新正式 Release，将同一个 `PAL_VERSION` 传给 amd64、arm64 两个镜像；
+下载对应的 musl 静态包并校验 SHA-256、ELF 架构及静态链接。旧的 GNU/glibc 包不兼容此安装流程，
+须先发布包含两种 musl 附件的 pal Release。安装脚本与 Node 只在构建阶段，最终镜像不增加 shell 或包管理器。
+CI 在两种原生架构上运行最终镜像中的 `pal --version` 与 `pal article upload --help`。
+
+`Dockerfile` 的 `PAL_VERSION` 默认 `latest`；发布 CI 总是传入已解析的固定版本，避免构建缓存保留旧 CLI，
+也避免两种架构在 latest 变化时安装不同版本。容器运行期间不自更新 pal。
+本文只安装工具；posts 自动生成 `article.json`、调用上传命令和保存导入状态仍需单独接入。
+
 compose 服务定义在 dotfiles 仓库的 `selfhost/only/docker-compose.yaml`（服务名 `posts`），`POSTS_OIDC_CLIENT_SECRET` 和其他 secrets 一样由 compose 环境变量提供。
 
 文章直接写进 eric 的 `reading-list` 仓库，便于用 git 管理，所以容器以 `user: "1000:1000"`（eric）运行，config 目录也要归 eric 所有。`.work/` 是转换中的临时目录，应加入 reading-list 的 `.gitignore`。
@@ -67,4 +77,4 @@ task run:server                      # 终端 2，posts.db 和 data/ 都在 .dat
 task run:web                         # 终端 3，打开 http://localhost:5173
 ```
 
-验证：`task test`（gofmt、go vet、前端类型检查和 Go 测试）。测试使用假的 wf 和转换器，不调用模型。
+验证：`task test`（gofmt、go vet、前端类型检查、Go 测试和 pal 安装脚本测试）。测试使用假的 wf 和转换器，不调用模型。

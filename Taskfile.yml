@@ -91,6 +91,7 @@ tasks:
     cmds:
       - task: lint
       - task: test:go
+      - node --test scripts/install-pal.test.mjs
 
   test:go:
     desc: Run Go unit and HTTP tests

@@ -80,6 +80,10 @@ README 讲 posts 做什么、怎么部署；这里记录业务规则和背后的
 - 容器里的 `127.0.0.1` 不是宿主机，所以 workflow 监听 Docker 网络 `my-network` 在宿主机上的网关地址。这个地址只有宿主机和该网络里的容器能访问，不对局域网和外网暴露，因此不做鉴权。
 - 模型和推理强度在 workflow 的 converter profile 里配置，posts 不关心。
 - 镜像只在 CI 构建。
+- 最终镜像内置 `/usr/local/bin/pal`，以 musl 静态二进制适配 `distroless/static-debian12:nonroot`。
+  CI 先解析 Palace 最新正式 Release 的 `latest.json`，把同一个固定 `PAL_VERSION` 传给 amd64、arm64 构建；
+  下载固定版本附件，校验 SHA-256、ELF 架构、无动态加载器和共享库依赖，再复制二进制进最终镜像。
+  Node 与解包工具不进入运行镜像。CLI 只在镜像重建时更新；本次不改变转换、落盘或上传业务行为。
 
 ## 暂不做
 
