@@ -260,7 +260,18 @@ func (s *server) importPost(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.lib.Import(r.Context(), userID(r), p.ID); err != nil {
+	var metadata store.ArticleMetadata
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&metadata); err != nil {
+		writeError(w, http.StatusBadRequest, "请提交有效的文章信息 JSON")
+		return
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		writeError(w, http.StatusBadRequest, "请只提交一份文章信息 JSON")
+		return
+	}
+	if err := s.lib.Import(r.Context(), userID(r), p.ID, metadata); err != nil {
 		writeStoreError(w, r, err)
 		return
 	}

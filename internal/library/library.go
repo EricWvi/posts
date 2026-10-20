@@ -8,6 +8,7 @@
 //	<year>/<month>/<id>/<slug>.md converted post
 //	<year>/<month>/<id>/assets/   the media the Markdown references
 //	<year>/<month>/<id>/original.html original upload preserved after conversion
+//	<year>/<month>/<id>/cleaned.html  exact HTML bytes passed to the converter
 //	<year>/<month>/<id>/article.json  metadata written on a manual Palace import
 //
 // Year and month come from the post's publication date, so a post only gets
@@ -396,6 +397,11 @@ func (l *Library) convert(ctx context.Context, p store.Post) (store.Converted, e
 	if err := l.place(work, dir, article); err != nil {
 		os.RemoveAll(dir)
 		return store.Converted{}, fmt.Errorf("保存转换结果: %w", err)
+	}
+	// Preserve the bytes actually sent, rather than regenerating from the original later.
+	if err := os.WriteFile(filepath.Join(dir, "cleaned.html"), html, 0o644); err != nil {
+		os.RemoveAll(dir)
+		return store.Converted{}, fmt.Errorf("保留模型输入: %w", err)
 	}
 	if _, err := os.Stat(filepath.Join(work, "original.html")); err == nil {
 		if err := copyFile(filepath.Join(work, "original.html"), filepath.Join(dir, "original.html")); err != nil {

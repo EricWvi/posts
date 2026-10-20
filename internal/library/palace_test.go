@@ -62,10 +62,10 @@ func TestPalaceImportIsManualAndRetryDoesNotConvert(t *testing.T) {
 	if _, err := e.st.ClaimImport(ctx); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("unrequested import: %v", err)
 	}
-	if err := e.lib.Import(ctx, e.user, p.ID); err != nil {
+	if err := e.lib.Import(ctx, e.user, p.ID, p.ImportMetadata()); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.lib.Import(ctx, e.user, p.ID); !errors.Is(err, store.ErrConflict) {
+	if err := e.lib.Import(ctx, e.user, p.ID, p.ImportMetadata()); !errors.Is(err, store.ErrConflict) {
 		t.Fatalf("duplicate import: %v", err)
 	}
 	claimed, err := e.st.ClaimImport(ctx)
@@ -102,7 +102,7 @@ func TestPalaceImportIsManualAndRetryDoesNotConvert(t *testing.T) {
 		t.Fatal("referenced asset missing")
 	}
 	f.err = nil
-	if err := e.lib.Import(ctx, e.user, p.ID); err != nil {
+	if err := e.lib.Import(ctx, e.user, p.ID, p.ImportMetadata()); err != nil {
 		t.Fatal(err)
 	}
 	claimed, err = e.st.ClaimImport(ctx)
@@ -114,7 +114,7 @@ func TestPalaceImportIsManualAndRetryDoesNotConvert(t *testing.T) {
 	if done.PalaceStatus != "done" || done.PalaceID == "" || done.PalaceError != "" || f.calls != 2 || e.conv.calls != 1 {
 		t.Fatalf("post = %+v; imports = %d, conversions = %d", done, f.calls, e.conv.calls)
 	}
-	if err := e.lib.Import(ctx, e.user, p.ID); !errors.Is(err, store.ErrConflict) {
+	if err := e.lib.Import(ctx, e.user, p.ID, p.ImportMetadata()); !errors.Is(err, store.ErrConflict) {
 		t.Fatalf("reimported completed post: %v", err)
 	}
 }
@@ -124,17 +124,17 @@ func TestImportOwnershipAndRestart(t *testing.T) {
 	e.lib.importer = &fakeImporter{}
 	ctx := context.Background()
 	p := convertedPost(t, e)
-	if err := e.lib.Import(ctx, e.user+1, p.ID); !errors.Is(err, store.ErrNotFound) {
+	if err := e.lib.Import(ctx, e.user+1, p.ID, p.ImportMetadata()); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("foreign import: %v", err)
 	}
 	ready, err := e.lib.Upload(ctx, e.user, page, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := e.lib.Import(ctx, e.user, ready.ID); !errors.Is(err, store.ErrConflict) {
+	if err := e.lib.Import(ctx, e.user, ready.ID, ready.ImportMetadata()); !errors.Is(err, store.ErrConflict) {
 		t.Fatalf("imported HTML: %v", err)
 	}
-	if err := e.lib.Import(ctx, e.user, p.ID); err != nil {
+	if err := e.lib.Import(ctx, e.user, p.ID, p.ImportMetadata()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := e.st.ClaimImport(ctx); err != nil {
@@ -172,5 +172,44 @@ func TestImportMissingSourceKeepsConvertedPost(t *testing.T) {
 	p.SourceURL = ""
 	if _, err := e.lib.uploadArticle(context.Background(), p); err == nil || f.calls != 0 {
 		t.Fatalf("missing URL: %v, calls %d", err, f.calls)
+	}
+}
+
+func TestConfirmedImportMetadataSurvivesRestart(t *testing.T) {
+	e := newEnv(t)
+	e.lib.importer = &fakeImporter{}
+	ctx := context.Background()
+	p := convertedPost(t, e)
+	confirmed := store.ArticleMetadata{Title: "Corrected title", URL: "https://example.com/confirmed", Date: "2024-02-29", Author: "User supplied author"}
+	if err := e.lib.Import(ctx, e.user, p.ID, confirmed); err != nil {
+		t.Fatal(err)
+	}
+	lib, err := New(ctx, e.st, e.dir, e.conv, WithImporter(&fakeImporter{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	queued, err := e.st.Post(ctx, e.user, p.ID)
+	if err != nil || queued.ImportMetadata() != confirmed || queued.Title != p.Title || queued.PublishedDate != p.PublishedDate || queued.Path != p.Path || queued.SourceURL != p.SourceURL {
+		t.Fatalf("metadata was lost or original changed: %+v, %v", queued, err)
+	}
+	claimed, err := e.st.ClaimImport(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lib.importPost(ctx, claimed)
+	data, err := os.ReadFile(filepath.Join(lib.postDir(p), "article.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var actual store.ArticleMetadata
+	if err := json.Unmarshal(data, &actual); err != nil {
+		t.Fatal(err)
+	}
+	if actual != confirmed {
+		t.Fatalf("uploaded metadata = %+v, want %+v", actual, confirmed)
+	}
+	md, err := os.ReadFile(filepath.Join(lib.postDir(p), p.Slug+".md"))
+	if err != nil || string(md) != article.Markdown {
+		t.Fatalf("Markdown changed: %s, %v", md, err)
 	}
 }

@@ -123,6 +123,28 @@ func TestUnwrapsShadowRoots(t *testing.T) {
 	}
 }
 
+func TestRemovesAutomaPalette(t *testing.T) {
+	palette := `<div id=automa-palette><template shadowrootmode=open><p>Plugin controls</p><img src="data:image/png;base64,` + b64("plugin image") + `"></template></div>`
+	for _, src := range []string{
+		`<body><article><p>Article text</p></article>` + palette + `</body>`,
+		`<body>` + palette + `<article><p>Article text</p></article></body>`,
+		`<body><article><p>Article text</p>` + palette + `</article></body>`,
+	} {
+		p := mustClean(t, src)
+		out := string(p.HTML)
+		if strings.Contains(out, "automa-palette") || strings.Contains(out, "Plugin controls") || len(p.Assets) != 0 {
+			t.Fatalf("plugin content or resources survived: %s, assets=%v", out, p.Assets)
+		}
+		if !strings.Contains(out, "<p>Article text</p>") {
+			t.Fatalf("article content lost: %s", out)
+		}
+	}
+	p := mustClean(t, `<body><div id=automa-palette-example><p>Article text</p></div></body>`)
+	if !strings.Contains(string(p.HTML), "Article text") {
+		t.Fatalf("similar ID was removed: %s", p.HTML)
+	}
+}
+
 func TestExtractsMedia(t *testing.T) {
 	png := "data:image/png;base64," + b64("png bytes")
 	webp := "data:image/webp;base64," + b64("webp bytes")

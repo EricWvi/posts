@@ -25,12 +25,14 @@ type fakeConverter struct {
 	article convert.Article
 	err     error
 	calls   int
+	html    []byte
 }
 
 func (f *fakeConverter) Convert(ctx context.Context, html []byte) (convert.Article, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
+	f.html = bytes.Clone(html)
 	return f.article, f.err
 }
 
@@ -174,6 +176,13 @@ func TestConversionPlacesPostByPublishedDate(t *testing.T) {
 	md, err := os.ReadFile(filepath.Join(e.dir, rel, "hello.md"))
 	if err != nil || string(md) != article.Markdown {
 		t.Fatalf("md = %q, %v", md, err)
+	}
+	cleaned, err := os.ReadFile(filepath.Join(e.dir, rel, "cleaned.html"))
+	e.conv.mu.Lock()
+	modelInput := bytes.Clone(e.conv.html)
+	e.conv.mu.Unlock()
+	if err != nil || len(cleaned) == 0 || !bytes.Equal(cleaned, modelInput) {
+		t.Fatalf("saved HTML differs from model input: %v", err)
 	}
 	// Only the photo the article shows is kept; the site logo is dropped.
 	if got := names(t, filepath.Join(e.dir, rel, "assets")); !slices.Equal(got, []string{photoName}) {

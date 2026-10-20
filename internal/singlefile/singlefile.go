@@ -72,6 +72,7 @@ func Inspect(src []byte) (Page, error) {
 // Clean parses a SingleFile page and returns its cleaned form.
 //
 // It removes:
+//   - the Automa extension's div#automa-palette and its entire subtree;
 //   - <style>, <script> (except JSON-LD metadata), <noscript>, <link>,
 //     <base>, <template> wrappers of declarative shadow roots (their
 //     content is kept) and inline <svg>;
@@ -195,6 +196,10 @@ func (c *cleaner) clean(n *html.Node, inContent bool) {
 
 // drop reports whether an element is removed together with its content.
 func (c *cleaner) drop(n *html.Node) bool {
+	// Extension UI is not page content, including any saved shadow DOM or media.
+	if n.DataAtom == atom.Div && attr(n, "id") == "automa-palette" {
+		return true
+	}
 	switch n.DataAtom {
 	case atom.Style, atom.Noscript, atom.Link, atom.Base, atom.Svg:
 		return true

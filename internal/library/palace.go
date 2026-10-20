@@ -12,14 +12,14 @@ import (
 )
 
 // Import queues an explicit user request. Conversion never calls this method.
-func (l *Library) Import(ctx context.Context, userID, id int64) error {
+func (l *Library) Import(ctx context.Context, userID, id int64, metadata store.ArticleMetadata) error {
 	if _, err := l.store.Post(ctx, userID, id); err != nil {
 		return err
 	}
 	if l.importer == nil {
 		return fmt.Errorf("%w: 尚未配置 Palace 导入", store.ErrConflict)
 	}
-	if err := l.store.EnqueueImport(ctx, userID, id); err != nil {
+	if err := l.store.EnqueueImport(ctx, userID, id, metadata); err != nil {
 		return err
 	}
 	l.notify()
@@ -43,15 +43,10 @@ func (l *Library) importPost(ctx context.Context, p store.Post) {
 }
 
 func (l *Library) uploadArticle(ctx context.Context, p store.Post) (string, error) {
-	if p.SourceURL == "" {
-		return "", fmt.Errorf("文章缺少原文网址，无法导入 Palace")
+	metadata := p.ImportMetadata()
+	if err := metadata.Validate(); err != nil {
+		return "", err
 	}
-	metadata := struct {
-		Title  string `json:"title"`
-		URL    string `json:"url"`
-		Date   string `json:"date"`
-		Author string `json:"author,omitempty"`
-	}{p.Title, p.SourceURL, p.PublishedDate, p.Author}
 	data, err := json.Marshal(metadata)
 	if err != nil {
 		return "", err

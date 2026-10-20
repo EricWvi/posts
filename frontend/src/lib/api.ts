@@ -1,5 +1,7 @@
 export type PostStatus = "uploading" | "ready" | "queued" | "converting" | "done" | "failed";
 
+export type ArticleMetadata = { title: string; url: string; date: string; author?: string };
+
 /** Report of Markdown blocks that are not text on the original page. */
 export type ContentWarning = {
   checked: number;
@@ -34,6 +36,7 @@ export type Post = {
   palaceStatus: "" | "queued" | "importing" | "done" | "failed";
   palaceId: string;
   palaceError: string;
+  palaceMetadata: ArticleMetadata | null;
   originalAvailable: boolean;
 };
 
@@ -57,10 +60,14 @@ export class ApiError extends Error {
 
 export const goToLogin = () => window.location.assign("/auth/login");
 
-async function request<T>(method: string, path: string, as: "json" | "text" = "json"): Promise<T> {
+async function request<T>(method: string, path: string, as: "json" | "text" = "json", body?: unknown): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(path, { method, cache: "no-store" });
+    res = await fetch(path, {
+      method,
+      cache: "no-store",
+      ...(body !== undefined ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
+    });
   } catch {
     throw new ApiError(0, "无法连接服务器");
   }
@@ -83,7 +90,7 @@ export const api = {
   markdown: (id: number) => request<string>("GET", `/api/posts/${id}/md`, "text"),
   start: (id: number) => request<void>("POST", `/api/posts/${id}/convert`),
   retry: (id: number) => request<Post>("POST", `/api/posts/${id}/retry`),
-  import: (id: number) => request<void>("POST", `/api/posts/${id}/import`),
+  import: ({ id, metadata }: { id: number; metadata: ArticleMetadata }) => request<void>("POST", `/api/posts/${id}/import`, "json", metadata),
   remove: (id: number) => request<void>("DELETE", `/api/posts/${id}`),
 };
 

@@ -52,9 +52,10 @@ type Post struct {
 	UploadedAt  time.Time       `json:"uploadedAt"`
 	ConvertedAt *time.Time      `json:"convertedAt"`
 	// Palace import is independent of conversion. Empty means never requested.
-	PalaceStatus string `json:"palaceStatus"`
-	PalaceID     string `json:"palaceId"`
-	PalaceError  string `json:"palaceError"`
+	PalaceStatus   string           `json:"palaceStatus"`
+	PalaceID       string           `json:"palaceId"`
+	PalaceError    string           `json:"palaceError"`
+	PalaceMetadata *ArticleMetadata `json:"palaceMetadata"`
 	// Computed from the filesystem by the API; old archives may lack original HTML.
 	OriginalAvailable bool `json:"originalAvailable"`
 }
@@ -77,18 +78,25 @@ type Converted struct {
 }
 
 const postColumns = `id, user_id, status, title, source_url, saved_at, published_date, author, slug, path,
-	error, warning, uploaded_at, converted_at, palace_status, palace_id, palace_error`
+	error, warning, uploaded_at, converted_at, palace_status, palace_id, palace_error, palace_metadata`
 
 func scanPost(row interface{ Scan(...any) error }) (Post, error) {
 	var p Post
 	var savedAt, convertedAt sql.NullInt64
 	var uploadedAt int64
 	var warning string
+	var metadata string
 	err := row.Scan(&p.ID, &p.UserID, &p.Status, &p.Title, &p.SourceURL, &savedAt, &p.PublishedDate,
 		&p.Author, &p.Slug, &p.Path, &p.Error, &warning, &uploadedAt, &convertedAt,
-		&p.PalaceStatus, &p.PalaceID, &p.PalaceError)
+		&p.PalaceStatus, &p.PalaceID, &p.PalaceError, &metadata)
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, ErrNotFound
+	}
+	if err != nil {
+		return p, err
+	}
+	if err := json.Unmarshal([]byte(metadata), &p.PalaceMetadata); err != nil {
+		return p, err
 	}
 	p.UploadedAt = time.Unix(uploadedAt, 0).UTC()
 	p.SavedAt = unixPtr(savedAt)

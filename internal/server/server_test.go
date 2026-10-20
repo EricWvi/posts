@@ -171,21 +171,36 @@ func (fakeImporter) Upload(context.Context, string) (string, error) {
 
 func TestManualPalaceImport(t *testing.T) {
 	h, _ := newServer(t, library.WithImporter(fakeImporter{}))
-	source := "<!-- Page saved with SingleFile\n url: https://blog.test/hello\n -->" + page
-	res := upload(t, h, map[string]string{"hello.html": source})
+	res := upload(t, h, map[string]string{"hello.html": page})
 	id := res.Posts[0].ID
 	path := "/api/posts/" + itoa(id)
-	if rec := do(h, "POST", path+"/import", nil, ""); rec.Code != 409 {
+	if rec := do(h, "POST", path+"/import", bytes.NewBufferString(`{"title":"Hello","url":"https://blog.test/hello","date":"2025-03-04"}`), "application/json"); rec.Code != 409 {
 		t.Fatalf("import before conversion: %d %s", rec.Code, rec.Body)
 	}
 	if rec := do(h, "POST", path+"/convert", nil, ""); rec.Code != 204 {
 		t.Fatalf("start: %d", rec.Code)
 	}
 	p := waitDone(t, h, id)
+	if p.SourceURL != "" {
+		t.Fatalf("test page unexpectedly has URL: %s", p.SourceURL)
+	}
+	for _, body := range []string{
+		``, `{}`, `{"title":"Hello","url":"","date":"2025-03-04"}`,
+		`{"title":" ","url":"https://blog.test/hello","date":"2025-03-04"}`,
+		`{"title":"Hello","url":"ftp://blog.test/hello","date":"2025-03-04"}`,
+		`{"title":"Hello","url":"https://blog.test/hello","date":"2025-02-30"}`,
+		`{"title":"Hello","url":"https://blog.test/hello","date":"2025-03-04T12:00:00"}`,
+		`{"title":"Hello","url":"https://blog.test/hello","date":"2025-03-04","extra":true}`,
+		`{"title":"Hello","url":"https://blog.test/hello","date":"2025-03-04"}{}`,
+	} {
+		if rec := do(h, "POST", path+"/import", bytes.NewBufferString(body), "application/json"); rec.Code != 400 {
+			t.Fatalf("invalid metadata %s: %d %s", body, rec.Code, rec.Body)
+		}
+	}
 	if p.PalaceStatus != "" || p.PalaceID != "" {
 		t.Fatalf("automatically imported: %+v", p)
 	}
-	if rec := do(h, "POST", path+"/import", nil, ""); rec.Code != 204 {
+	if rec := do(h, "POST", path+"/import", bytes.NewBufferString(`{"title":"Hello","url":"https://blog.test/hello","date":"2025-03-04"}`), "application/json"); rec.Code != 204 {
 		t.Fatalf("import: %d %s", rec.Code, rec.Body)
 	}
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
@@ -193,10 +208,13 @@ func TestManualPalaceImport(t *testing.T) {
 			t.Fatal(err)
 		}
 		if p.PalaceStatus == "done" {
+			if p.PalaceMetadata == nil || p.PalaceMetadata.URL != "https://blog.test/hello" || p.SourceURL != "" {
+				t.Fatalf("confirmed metadata not saved independently: %+v", p)
+			}
 			if p.PalaceID == "" || p.Status != store.StatusDone {
 				t.Fatalf("post = %+v", p)
 			}
-			if rec := do(h, "POST", path+"/import", nil, ""); rec.Code != 409 {
+			if rec := do(h, "POST", path+"/import", bytes.NewBufferString(`{"title":"Hello","url":"https://blog.test/hello","date":"2025-03-04"}`), "application/json"); rec.Code != 409 {
 				t.Fatalf("duplicate import: %d", rec.Code)
 			}
 			if rec := do(h, "GET", path+"/md", nil, ""); rec.Code != 200 {

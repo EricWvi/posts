@@ -65,6 +65,7 @@ var migrations = []migration{
 	execSQL(`ALTER TABLE posts ADD COLUMN palace_status TEXT NOT NULL DEFAULT '';
 	ALTER TABLE posts ADD COLUMN palace_id TEXT NOT NULL DEFAULT '';
 	ALTER TABLE posts ADD COLUMN palace_error TEXT NOT NULL DEFAULT '';`),
+	execSQL(`ALTER TABLE posts ADD COLUMN palace_metadata TEXT NOT NULL DEFAULT 'null'`),
 }
 
 func migrate(db *sql.DB) error {

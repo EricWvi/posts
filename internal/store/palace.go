@@ -3,10 +3,11 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 )
 
 // EnqueueImport checks ownership and queues only an unimported, converted post.
-func (s *Store) EnqueueImport(ctx context.Context, userID, id int64) error {
+func (s *Store) EnqueueImport(ctx context.Context, userID, id int64, metadata ArticleMetadata) error {
 	return s.inTx(ctx, func(tx *sql.Tx) error {
 		p, err := scanPost(tx.QueryRowContext(ctx, `SELECT `+postColumns+` FROM posts WHERE id = ? AND user_id = ?`, id, userID))
 		if err != nil {
@@ -15,7 +16,14 @@ func (s *Store) EnqueueImport(ctx context.Context, userID, id int64) error {
 		if p.Status != StatusDone || (p.PalaceStatus != "" && p.PalaceStatus != "failed") {
 			return conflict("只有已转换且尚未导入的文章可以导入 Palace")
 		}
-		_, err = tx.ExecContext(ctx, `UPDATE posts SET palace_status = 'queued', palace_error = '' WHERE id = ?`, id)
+		if err := metadata.Validate(); err != nil {
+			return err
+		}
+		data, err := json.Marshal(metadata)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE posts SET palace_status = 'queued', palace_error = '', palace_metadata = ? WHERE id = ?`, string(data), id)
 		return err
 	})
 }
