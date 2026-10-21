@@ -29,7 +29,7 @@ export function useMarkdown(post: Post | undefined) {
     queryKey: ["posts", post?.id, "md", post?.convertedAt],
     queryFn: () => api.markdown(post!.id),
     enabled: post?.status === "done",
-    staleTime: Infinity,
+    staleTime: 0,
   });
 }
 
@@ -69,6 +69,16 @@ export function useStartConversion() {
       // Updating its status here would unmount the mutation observer first.
       void qc.invalidateQueries({ queryKey: ["posts", id], refetchType: "none" });
       return qc.invalidateQueries({ queryKey: ["posts"], exact: true });
+    },
+  });
+}
+
+export function useSaveMarkdown() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.saveMarkdown,
+    onSuccess: (_, { post, markdown }) => {
+      qc.setQueryData(["posts", post.id, "md", post.convertedAt], markdown);
     },
   });
 }

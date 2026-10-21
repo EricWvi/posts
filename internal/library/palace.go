@@ -13,6 +13,8 @@ import (
 
 // Import queues an explicit user request. Conversion never calls this method.
 func (l *Library) Import(ctx context.Context, userID, id int64, metadata store.ArticleMetadata) error {
+	l.editMu.Lock()
+	defer l.editMu.Unlock()
 	if _, err := l.store.Post(ctx, userID, id); err != nil {
 		return err
 	}

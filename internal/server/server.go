@@ -64,6 +64,7 @@ func New(st *store.Store, lib *library.Library, authn *auth.Service, web fs.FS, 
 	private.HandleFunc("POST /api/posts/{id}/import", s.importPost)
 	private.HandleFunc("GET /api/posts/{id}/html", s.getOriginal)
 	private.HandleFunc("GET /api/posts/{id}/md", s.getMarkdown)
+	private.HandleFunc("PUT /api/posts/{id}/md", s.saveMarkdown)
 	private.HandleFunc("GET /api/posts/{id}/zip", s.getZip)
 	private.HandleFunc("GET /api/posts/{id}/assets/{name}", s.getAsset)
 	private.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -291,6 +292,24 @@ func (s *server) getMarkdown(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	serveFile(w, r, file)
+}
+
+// saveMarkdown accepts plain UTF-8 text and writes it to the existing archive file.
+func (s *server) saveMarkdown(w http.ResponseWriter, r *http.Request) {
+	p, ok := s.post(w, r)
+	if !ok {
+		return
+	}
+	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 16<<20))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Markdown 读取失败或超过 16 MB")
+		return
+	}
+	if err := s.lib.SaveMarkdown(r.Context(), userID(r), p.ID, data); err != nil {
+		writeStoreError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *server) getZip(w http.ResponseWriter, r *http.Request) {

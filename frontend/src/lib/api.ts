@@ -88,6 +88,19 @@ export const api = {
   posts: () => request<Post[]>("GET", "/api/posts"),
   post: (id: number) => request<Post>("GET", `/api/posts/${id}`),
   markdown: (id: number) => request<string>("GET", `/api/posts/${id}/md`, "text"),
+  saveMarkdown: async ({ post, markdown }: { post: Post; markdown: string }) => {
+    let res: Response;
+    try {
+      res = await fetch(`/api/posts/${post.id}/md`, { method: "PUT", headers: { "Content-Type": "text/markdown; charset=utf-8" }, body: markdown });
+    } catch {
+      throw new ApiError(0, "无法连接服务器");
+    }
+    if (res.status === 401) goToLogin();
+    if (!res.ok) {
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new ApiError(res.status, data?.error ?? `保存失败（${res.status}）`);
+    }
+  },
   start: (id: number) => request<void>("POST", `/api/posts/${id}/convert`),
   retry: (id: number) => request<Post>("POST", `/api/posts/${id}/retry`),
   import: ({ id, metadata }: { id: number; metadata: ArticleMetadata }) => request<void>("POST", `/api/posts/${id}/import`, "json", metadata),

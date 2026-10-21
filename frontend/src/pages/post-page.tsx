@@ -2,6 +2,7 @@ import { ArrowLeft, Download, ExternalLink, TriangleAlert } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 import { ConfirmDelete } from "@/components/confirm-delete";
+import { MarkdownEdit } from "@/components/markdown-edit";
 import { MarkdownView } from "@/components/markdown-view";
 import { OriginalPreview } from "@/components/original-preview";
 import { PalaceImport } from "@/components/palace-import";
@@ -31,6 +32,7 @@ export function PostPage({ id }: { id: number }) {
             </Link>
           </Button>
           <div className="flex-1" />
+          {md.data !== undefined && <MarkdownEdit key={post.id} post={post} markdown={md.data} />}
           <PalaceImport post={post} />
           {post.status === "done" && (
             <Button variant="outline" asChild>

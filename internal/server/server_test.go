@@ -283,3 +283,26 @@ func TestOriginalAndConversionArePrivate(t *testing.T) {
 		t.Fatalf("private post modified: %+v, %v", got, err)
 	}
 }
+
+func TestEditMarkdown(t *testing.T) {
+	h, _ := newServer(t)
+	id := upload(t, h, map[string]string{"hello.html": page}).Posts[0].ID
+	path := "/api/posts/" + itoa(id)
+	if rec := do(h, "PUT", path+"/md", bytes.NewBufferString("early"), "text/markdown"); rec.Code != http.StatusConflict {
+		t.Fatalf("early save: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "POST", path+"/convert", nil, ""); rec.Code != http.StatusNoContent {
+		t.Fatal(rec.Body)
+	}
+	waitDone(t, h, id)
+	const edited = "# 修改\n\n更新后的 Markdown。\n"
+	if rec := do(h, "PUT", path+"/md", bytes.NewBufferString(edited), "text/markdown"); rec.Code != http.StatusNoContent {
+		t.Fatalf("save: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "GET", path+"/md", nil, ""); rec.Code != http.StatusOK || rec.Body.String() != edited {
+		t.Fatalf("read saved: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(h, "PUT", path+"/md", bytes.NewBuffer([]byte{0xff}), "text/markdown"); rec.Code != http.StatusBadRequest {
+		t.Fatalf("invalid text: %d", rec.Code)
+	}
+}

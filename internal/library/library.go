@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 
 	"posts/internal/convert"
@@ -44,6 +45,7 @@ type Converter interface {
 // Library is safe for concurrent use. Run must be running for queued posts
 // to be converted.
 type Library struct {
+	editMu   sync.Mutex // Serializes file saves with import requests and deletion.
 	store    *store.Store
 	dir      string
 	conv     Converter
@@ -190,6 +192,8 @@ func (l *Library) Retry(ctx context.Context, userID, id int64) error {
 
 // Delete removes a post and its files.
 func (l *Library) Delete(ctx context.Context, userID, id int64) error {
+	l.editMu.Lock()
+	defer l.editMu.Unlock()
 	p, err := l.store.DeletePost(ctx, userID, id)
 	if err != nil {
 		return err
