@@ -1,0 +1,96 @@
+name: Prune old package versions
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: prune-package-versions
+  cancel-in-progress: false
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      KEEP_VERSION: "0.3.2"
+    steps:
+      - name: Delete old versions and verify retained manifests
+        shell: python
+        run: |
+          import json
+          import os
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          
+          owner, package = os.environ['GITHUB_REPOSITORY'].split('/')
+          package = package.lower()
+          version = os.environ['KEEP_VERSION']
+          api_base = f'https://api.github.com/users/{owner}/packages/container/{urllib.parse.quote(package, safe="")}'
+          headers = {'Authorization': f'Bearer {os.environ["GH_TOKEN"]}', 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
+          
+          def api(path='', method='GET'):
+              req = urllib.request.Request(api_base + path, headers=headers, method=method)
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  return None if response.status == 204 else json.load(response)
+          
+          def versions():
+              result = []
+              page = 1
+              while True:
+                  batch = api(f'/versions?per_page=100&page={page}')
+                  result.extend(batch)
+                  if len(batch) < 100:
+                      return result
+                  page += 1
+          
+          metadata = api()
+          assert metadata['repository']['full_name'].lower() == os.environ['GITHUB_REPOSITORY'].lower(), metadata.get('repository')
+          repo = f'{owner.lower()}/{package}'
+          with urllib.request.urlopen(f'https://ghcr.io/token?service=ghcr.io&scope=repository:{repo}:pull', timeout=30) as response:
+              registry_token = json.load(response)['token']
+          registry_headers = {'Authorization': f'Bearer {registry_token}', 'Accept': 'application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json'}
+          
+          def manifest(ref):
+              req = urllib.request.Request(f'https://ghcr.io/v2/{repo}/manifests/{ref}', headers=registry_headers)
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  return response.headers['Docker-Content-Digest'], json.load(response)
+          
+          snapshot = versions()
+          root, _ = manifest(version)
+          latest, _ = manifest('latest')
+          assert latest == root, f'latest {latest} differs from selected {version}: {root}'
+          keep = set()
+          
+          def retain(ref):
+              digest, document = manifest(ref)
+              if digest in keep:
+                  return
+              keep.add(digest)
+              for child in document.get('manifests', []):
+                  retain(child['digest'])
+          
+          retain(version)
+          cache_versions = [v for v in snapshot if 'buildcache' in v['metadata']['container']['tags']]
+          if cache_versions:
+              retain('buildcache')
+          by_digest = {v['name']: v for v in snapshot}
+          assert root in by_digest and version in by_digest[root]['metadata']['container']['tags'], 'Selected version missing from API inventory'
+          assert keep <= set(by_digest), f'Referenced versions missing from inventory: {keep - set(by_digest)}'
+          delete = [v for v in snapshot if v['name'] not in keep]
+          print(json.dumps({'package': repo, 'version': version, 'retained_digests': sorted(keep), 'delete_count': len(delete)}, indent=2), flush=True)
+          for v in delete:
+              print('DELETE', v['id'], v['name'], v['metadata']['container']['tags'], flush=True)
+          assert manifest(version)[0] == root and manifest('latest')[0] == root, 'Tags changed during planning'
+          for v in delete:
+              api(f'/versions/{v["id"]}', method='DELETE')
+          remaining = versions()
+          assert {v['name'] for v in remaining} == keep, 'Unexpected versions remaining'
+          assert manifest(version)[0] == root and manifest('latest')[0] == root, 'Retained tags changed'
+          for digest in keep:
+              manifest(digest)
+          summary = f'{package}: retained {version}, {len(keep)} package versions; deleted {len(delete)} old versions.'
+          print(summary, flush=True)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+              output.write(summary + '\n')
